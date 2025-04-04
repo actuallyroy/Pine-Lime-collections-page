@@ -1,106 +1,202 @@
-import { Checkbox } from "@/components/ui/checkbox"
-import { Slider } from "@/components/ui/slider"
+'use client'
 
-export default function ProductFilters() {
-  const categories = [
-    "Memory Maps",
-    "Journey Maps",
-    "Pet Portraits",
-    "Photo Sets",
-    "Personalized Games",
-    "Framed Pictures",
-    "Magnets",
-    "Mugs",
-    "Milestone Maps",
-    "Artworks",
-    "Gift Hampers",
-  ]
+import React, { useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import { Slider } from "@/components/ui/slider"
+import { Checkbox } from "@/components/ui/checkbox"
+import { usePathname, useSearchParams } from 'next/navigation'
+import { DualRangeSlider } from './dual-slider'
+
+// Filter options
+const productTypes = [
+  { id: 'MEMORY_MAP', label: 'Memory Maps' },
+  { id: 'JOURNEY_MAP', label: 'Journey Maps' },
+  { id: 'DECOR_MAP', label: 'Decor Maps' },
+  { id: 'VINTAGE_POSTER', label: 'Vintage Posters' },
+  { id: 'REFLECTION', label: 'Reflections' },
+  { id: 'GAME', label: 'Games' },
+  { id: 'PAIGAAM', label: 'Paigaam' }
+];
+
+const occasions = [
+  { id: 'anniversary', label: 'Anniversary' },
+  { id: 'birthday', label: 'Birthday' },
+  { id: 'wedding', label: 'Wedding' },
+  { id: 'graduation', label: 'Graduation' },
+  { id: 'housewarming', label: 'Housewarming' }
+];
+
+interface ProductFiltersProps {
+  currentFilters: {
+    priceRange?: {
+      min?: number;
+      max?: number;
+    };
+    productCodes?: string[];
+    keywords?: string[];
+    sortBy?: string;
+  };
+}
+
+export default function ProductFilters({ currentFilters }: ProductFiltersProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [isPending, startTransition] = useTransition()
+  
+  // State for price slider
+  const [priceRange, setPriceRange] = React.useState<number[]>([
+    currentFilters.priceRange?.min || 0, 
+    currentFilters.priceRange?.max || 5000
+  ]);
+  
+  // Create a URL builder function in the client component
+  const buildFilterUrl = (newParams: Record<string, any>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    
+    // Handle new parameters
+    Object.entries(newParams).forEach(([key, value]) => {
+      if (value === undefined || value === null) {
+        params.delete(key);
+      } else if (Array.isArray(value)) {
+        params.delete(key); // Remove existing values
+        value.forEach(val => params.append(key, String(val)));
+      } else {
+        params.set(key, String(value));
+      }
+    });
+    
+    return `${pathname}?${params.toString()}`;
+  };
+  
+  // Create a function to toggle filters with transition
+  const toggleFilter = (key: string, value: string, isChecked: boolean) => {
+    startTransition(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      
+      if (isChecked) {
+        // Add the value
+        params.append(key, value);
+      } else {
+        // Remove the value
+        const values = params.getAll(key).filter(v => v !== value);
+        params.delete(key);
+        values.forEach(v => params.append(key, v));
+      }
+      
+      router.push(`${pathname}?${params.toString()}#product-grid`);
+    });
+  };
+  
+  // Get all current product codes and keywords from search params
+  const currentProductCodes = searchParams.getAll('productCode');
+  const currentKeywords = searchParams.getAll('keyword');
 
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-medium text-[#563635] mb-3">Categories</h3>
-        <div className="space-y-2">
-          {categories.map((category) => (
-            <div key={category} className="flex items-center">
-              <Checkbox
-                id={category}
-                className="border-[#563635]/30 data-[state=checked]:bg-[#b7384e] data-[state=checked]:border-[#b7384e]"
-              />
-              <label htmlFor={category} className="ml-2 text-sm text-[#563635]">
-                {category}
-              </label>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="border-t border-[#563635]/10 pt-6">
-        <h3 className="text-sm font-medium text-[#563635] mb-3">Price Range</h3>
-        <Slider defaultValue={[0, 100]} max={100} step={1} className="py-4" />
+        <h3 className="font-medium mb-3">Price Range</h3>
+        <DualRangeSlider 
+          step={5} 
+          min={99} 
+          max={5000} 
+          value={priceRange}
+          onValueChange={(value: number[]) => {
+            setPriceRange(value);
+          }} 
+        />
         <div className="flex items-center justify-between">
-          <span className="text-sm text-[#563635]">$0</span>
-          <span className="text-sm text-[#563635]">$100</span>
+          <span>₹{priceRange[0]}</span>
+          <span>₹{priceRange[1]}</span>
+        </div>
+        <div className="mt-2">
+          <button
+            onClick={() => {
+              startTransition(() => {
+                router.push(buildFilterUrl({
+                  priceMin: priceRange[0],
+                  priceMax: priceRange[1]
+                }));
+              });
+            }}
+            className="text-sm text-[#b7384e] font-medium"
+            disabled={isPending}
+          >
+            {isPending ? 'Applying...' : 'Apply Price Filter'}
+          </button>
         </div>
       </div>
 
-      <div className="border-t border-[#563635]/10 pt-6">
-        <h3 className="text-sm font-medium text-[#563635] mb-3">Shipping</h3>
+      <div>
+        <h3 className="font-medium mb-3">Product Type</h3>
         <div className="space-y-2">
-          <div className="flex items-center">
-            <Checkbox
-              id="express"
-              className="border-[#563635]/30 data-[state=checked]:bg-[#b7384e] data-[state=checked]:border-[#b7384e]"
-            />
-            <label htmlFor="express" className="ml-2 text-sm text-[#563635]">
-              Express Delivery
-            </label>
-          </div>
-          <div className="flex items-center">
-            <Checkbox
-              id="standard"
-              className="border-[#563635]/30 data-[state=checked]:bg-[#b7384e] data-[state=checked]:border-[#b7384e]"
-            />
-            <label htmlFor="standard" className="ml-2 text-sm text-[#563635]">
-              Standard Delivery
-            </label>
-          </div>
+          {productTypes.map((type) => {
+            const isChecked = currentProductCodes.includes(type.id);
+            
+            return (
+              <div key={type.id} className="flex items-center space-x-2">
+                <Checkbox 
+                  id={`type-${type.id}`} 
+                  checked={isChecked}
+                  disabled={isPending}
+                  onCheckedChange={(checked) => {
+                    toggleFilter('productCode', type.id, Boolean(checked));
+                  }}
+                />
+                <label
+                  htmlFor={`type-${type.id}`}
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  {type.label}
+                </label>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      <div className="border-t border-[#563635]/10 pt-6">
-        <h3 className="text-sm font-medium text-[#563635] mb-3">Customization</h3>
+      <div>
+        <h3 className="font-medium mb-3">Occasion</h3>
         <div className="space-y-2">
-          <div className="flex items-center">
-            <Checkbox
-              id="photo"
-              className="border-[#563635]/30 data-[state=checked]:bg-[#b7384e] data-[state=checked]:border-[#b7384e]"
-            />
-            <label htmlFor="photo" className="ml-2 text-sm text-[#563635]">
-              Photo Upload
-            </label>
-          </div>
-          <div className="flex items-center">
-            <Checkbox
-              id="text"
-              className="border-[#563635]/30 data-[state=checked]:bg-[#b7384e] data-[state=checked]:border-[#b7384e]"
-            />
-            <label htmlFor="text" className="ml-2 text-sm text-[#563635]">
-              Text Customization
-            </label>
-          </div>
-          <div className="flex items-center">
-            <Checkbox
-              id="color"
-              className="border-[#563635]/30 data-[state=checked]:bg-[#b7384e] data-[state=checked]:border-[#b7384e]"
-            />
-            <label htmlFor="color" className="ml-2 text-sm text-[#563635]">
-              Color Options
-            </label>
-          </div>
+          {occasions.map((occasion) => {
+            const isChecked = currentKeywords.includes(occasion.id);
+            
+            return (
+              <div key={occasion.id} className="flex items-center space-x-2">
+                <Checkbox 
+                  id={`occasion-${occasion.id}`} 
+                  checked={isChecked}
+                  disabled={isPending}
+                  onCheckedChange={(checked) => {
+                    toggleFilter('keyword', occasion.id, Boolean(checked));
+                  }}
+                />
+                <label
+                  htmlFor={`occasion-${occasion.id}`}
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  {occasion.label}
+                </label>
+              </div>
+            );
+          })}
         </div>
+      </div>
+
+      <div>
+        <button
+          onClick={() => {
+            startTransition(() => {
+              router.push(`${pathname}?page=1`);
+            });
+          }}
+          className="text-sm text-[#b7384e] font-medium"
+          disabled={isPending}
+        >
+          Reset All Filters
+        </button>
       </div>
     </div>
-  )
+  );
 }
 

@@ -6,10 +6,108 @@ import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import ProductFilters from "@/components/product-filters"
 import Image from "next/image"
+import { getCollectionBySlug } from "@/lib/supabase/collections"
+import Pagination from "@/components/pagination"
+import SortDropdown from '@/components/sort-dropdown'
+// Import the client wrapper directly
+import ScrollManagerWrapper from '@/components/scroll-manager-wrapper'
 
-export default function ProductsPage() {
+// Update this interface
+interface FilterParams {
+  priceRange?: { min?: number; max?: number };
+  productCodes?: string[];
+  keywords?: string[];
+  sortBy?: 'price_asc' | 'price_desc' | 'newest' | 'oldest';
+}
+
+export default async function ProductsPage({
+  params,
+  searchParams,
+}: {
+  params: { slug: string },
+  searchParams: { 
+    page?: string; 
+    perPage?: string;
+    priceMin?: string;
+    priceMax?: string;
+    productCode?: string | string[];
+    keyword?: string | string[];
+    sortBy?: string;
+  }
+}) {
+  // Parse pagination parameters from URL
+  const currentPage = Number(searchParams.page) || 1
+  const itemsPerPage = Number(searchParams.perPage) || 9 // Default to 9 items per page
+  
+  // Get collection slug from path params
+  const slug = params.slug
+  
+  // Replace this entire filter parsing section
+  // Parse filter parameters from URL
+  const filters: FilterParams = {}
+  
+  // Handle price range filter
+  if (searchParams.priceMin || searchParams.priceMax) {
+    filters.priceRange = {
+      min: searchParams.priceMin ? Number(searchParams.priceMin) : undefined,
+      max: searchParams.priceMax ? Number(searchParams.priceMax) : undefined
+    }
+  }
+  
+  // Handle product codes filter (can be single string or array)
+  if (searchParams.productCode) {
+    const codes = Array.isArray(searchParams.productCode) 
+      ? searchParams.productCode 
+      : [searchParams.productCode]
+    filters.productCodes = codes
+  }
+  
+  // Handle keywords filter
+  if (searchParams.keyword) {
+    const keywords = Array.isArray(searchParams.keyword)
+      ? searchParams.keyword
+      : [searchParams.keyword]
+    filters.keywords = keywords
+  }
+  
+  // Handle sorting
+  if (searchParams.sortBy && 
+      ['price_asc', 'price_desc', 'newest', 'oldest'].includes(searchParams.sortBy)) {
+    filters.sortBy = searchParams.sortBy as 'price_asc' | 'price_desc' | 'newest' | 'oldest'
+  }
+  
+  // Replace this section
+  // Fetch paginated products with filters
+  const paginatedCollection = await getCollectionBySlug(
+    slug, 
+    currentPage, 
+    itemsPerPage, 
+    'IN', // Default currency code
+    filters
+  )
+
+  // Debug log to see the paginatedCollection
+  console.log("Paginated collection:", paginatedCollection) // Debug log
+  
+  // Handle both successful and empty results
+  let paginatedProducts: any[] = [];
+  let totalPages = 0;
+
+  if (paginatedCollection) {
+    paginatedProducts = paginatedCollection.data || [];
+    totalPages = paginatedCollection.totalPages || 0;
+  }
+
+  // Extract collection title and description
+  const collectionTitle = slug.split("-").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+  const collectionDescription = "Find the perfect gift that will make their day unforgettable and strengthen your bond.";
+  
   return (
     <div className="bg-[#fcf8ed] min-h-screen">
+      {/* Use the client wrapper directly */}
+      <ScrollManagerWrapper />
+      
+      {/* Header remains unchanged */}
       <header className="border-b border-[#563635]/10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
@@ -47,12 +145,13 @@ export default function ProductsPage() {
         </div>
       </header>
 
+      {/* Hero section remains unchanged */}
       <div className="bg-[#563635] text-white py-10 px-4">
         <div className="container mx-auto">
           <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-3xl md:text-4xl font-bold mb-4">Birthday Gifts for Boyfriend</h1>
+            <h1 className="text-3xl md:text-4xl font-bold mb-4">{collectionTitle}</h1>
             <p className="text-white/90 text-lg mb-6">
-              Find the perfect birthday gift that will make his day unforgettable and strengthen your bond.
+              {collectionDescription}
             </p>
 
             <div className="grid md:grid-cols-3 gap-6 mt-8">
@@ -97,7 +196,10 @@ export default function ProductsPage() {
           <div className="md:w-64 lg:w-72">
             <div className="hidden md:block">
               <h2 className="text-xl font-semibold text-[#563635] mb-4">Filters</h2>
-              <ProductFilters />
+              {/* Pass only current filters to ProductFilters */}
+              <ProductFilters 
+                currentFilters={filters} 
+              />
             </div>
             <Sheet>
               <SheetTrigger asChild>
@@ -108,32 +210,51 @@ export default function ProductsPage() {
               </SheetTrigger>
               <SheetContent side="left" className="bg-[#fcf8ed]">
                 <h2 className="text-xl font-semibold text-[#563635] mb-4">Filters</h2>
-                <ProductFilters />
+                {/* Just pass current filters */}
+                <ProductFilters 
+                  currentFilters={filters} 
+                />
               </SheetContent>
             </Sheet>
           </div>
-          <div className="flex-1">
+          
+          <div id="product-grid" className="flex-1">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl md:text-3xl font-bold text-[#563635]">Our Products</h2>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-[#563635]/70">Sort by:</span>
-                <select className="text-sm border rounded-md border-[#563635]/20 px-2 py-1 bg-white">
-                  <option>Popularity</option>
-                  <option>Price: Low to High</option>
-                  <option>Price: High to Low</option>
-                  <option>Newest</option>
-                </select>
-              </div>
+              <SortDropdown currentSort={searchParams.sortBy || ''} />
             </div>
             <p className="text-[#563635]/80 mb-8">
               Discover our unique, personalized gifts that help relive happy memories with friends and family. All
               products are manufactured internally and shipped worldwide within 7 days.
             </p>
-            <ProductGrid />
+            
+            {/* Show products or no products message */}
+            {paginatedProducts.length > 0 ? (
+              <>
+                <ProductGrid products={paginatedProducts} />
+                {totalPages > 1 && (
+                  <div className="mt-8">
+                    <Pagination 
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      baseUrl={getBaseUrlWithParams(slug, searchParams)}
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="py-12 text-center border border-dashed border-[#563635]/20 rounded-lg">
+                <p className="text-[#563635]/70 text-lg">No products found matching your filters.</p>
+                <Link href={`/collections/${slug}`} className="mt-4 inline-block text-[#b7384e] font-medium">
+                  Clear all filters
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
+      {/* Footer remains unchanged */}
       <footer className="bg-[#563635] text-white mt-16 py-12">
         <div className="container mx-auto px-4">
           <div className="flex flex-col items-center mb-8">
@@ -315,5 +436,26 @@ export default function ProductsPage() {
       </footer>
     </div>
   )
+
+  // Add this helper function in your component:
+  function getBaseUrlWithParams(slug: string, searchParams: Record<string, any>) {
+    // Create a new search params object excluding 'page'
+    const newParams = new URLSearchParams();
+    
+    // Copy all current search params except 'page'
+    Object.entries(searchParams).forEach(([key, value]) => {
+      if (key !== 'page') {
+        if (Array.isArray(value)) {
+          value.forEach(v => newParams.append(key, v));
+        } else if (value) {
+          newParams.set(key, value);
+        }
+      }
+    });
+    
+    // Build the base URL with all params except page
+    const queryString = newParams.toString();
+    return `/collections/${slug}${queryString ? '?' + queryString : ''}`;
+  }
 }
 
