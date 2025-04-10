@@ -102,36 +102,6 @@ export default async function ProductsPage({
     availableKeywords = paginatedCollection.keywords || [];  // Extract keywords from response
   }
 
-  // Define products order
-  const productsOrder = ["HAMPER", "MEMORY_MAP", "REWIND", "REFLECTION", "JOURNEY_MAP", "MUG", "MAGNET", "VINTAGE_POSTER", "DECOR_MAP", "GAME", "ROCKET_RUN"];
-
-  // Function to arrange products in specific order
-  function arrange(data: CollectionItem[], productsOrder: string[]): CollectionItem[] {
-    let obj: Record<string, CollectionItem[]> = {};
-    let lengths: number[] = [];
-    productsOrder.forEach((product) => {
-      obj[product] = data.filter((item) => item.product_code === product);
-      lengths.push(obj[product].length);
-    });
-    
-    let arr: CollectionItem[] = [];
-    for (let i = 0; i < Math.max(...lengths); i++) {
-      productsOrder.forEach((product) => {
-        let productItems = obj[product];
-        if (productItems.length > 0) {
-          arr.push(productItems[productItems.length - 1]);
-          productItems.pop();
-        }
-      });
-    }
-    return arr;
-  }
-
-  // If products exist, arrange them in the specified order
-  if (paginatedProducts.length > 0) {
-    paginatedProducts = arrange(paginatedProducts, productsOrder);
-  }
-
   // Extract collection title and description
   const collectionTitle = slug.split("-").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
   const collectionDescription = "Find the perfect gift that will make their day unforgettable and strengthen your bond.";
