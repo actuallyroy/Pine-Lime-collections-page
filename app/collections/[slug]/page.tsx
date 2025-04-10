@@ -9,10 +9,8 @@ import Image from "next/image"
 import { getCollectionBySlug } from "@/lib/supabase/collections"
 import Pagination from "@/components/pagination"
 import SortDropdown from '@/components/sort-dropdown'
-// Import the client wrapper directly
 import ScrollManagerWrapper from '@/components/scroll-manager-wrapper'
 
-// Update this interface
 interface FilterParams {
   priceRange?: { min?: number; max?: number };
   productCodes?: string[];
@@ -35,67 +33,69 @@ export default async function ProductsPage({
     sortBy?: string;
   }
 }) {
+  // Await the incoming params/seachParams
+  const sp = await Promise.resolve(searchParams)
+  const p = await Promise.resolve(params)
+
   // Parse pagination parameters from URL
-  const currentPage = Number(searchParams.page) || 1
-  const itemsPerPage = Number(searchParams.perPage) || 9 // Default to 9 items per page
-  
+  const currentPage = Number(sp.page) || 1
+  const itemsPerPage = Number(sp.perPage) || 9 // Default to 9 items per page
+
   // Get collection slug from path params
-  const slug = params.slug
-  
-  // Replace this entire filter parsing section
+  const slug = p.slug
+
   // Parse filter parameters from URL
   const filters: FilterParams = {}
-  
+
   // Handle price range filter
-  if (searchParams.priceMin || searchParams.priceMax) {
+  if (sp.priceMin || sp.priceMax) {
     filters.priceRange = {
-      min: searchParams.priceMin ? Number(searchParams.priceMin) : undefined,
-      max: searchParams.priceMax ? Number(searchParams.priceMax) : undefined
+      min: sp.priceMin ? Number(sp.priceMin) : undefined,
+      max: sp.priceMax ? Number(sp.priceMax) : undefined
     }
   }
-  
+
   // Handle product codes filter (can be single string or array)
-  if (searchParams.productCode) {
-    const codes = Array.isArray(searchParams.productCode) 
-      ? searchParams.productCode 
-      : [searchParams.productCode]
+  if (sp.productCode) {
+    const codes = Array.isArray(sp.productCode)
+      ? sp.productCode 
+      : [sp.productCode]
     filters.productCodes = codes
   }
-  
+
   // Handle keywords filter
-  if (searchParams.keyword) {
-    const keywords = Array.isArray(searchParams.keyword)
-      ? searchParams.keyword
-      : [searchParams.keyword]
+  if (sp.keyword) {
+    const keywords = Array.isArray(sp.keyword)
+      ? sp.keyword
+      : [sp.keyword]
     filters.keywords = keywords
   }
-  
+
   // Handle sorting
-  if (searchParams.sortBy && 
-      ['price_asc', 'price_desc', 'newest', 'oldest'].includes(searchParams.sortBy)) {
-    filters.sortBy = searchParams.sortBy as 'price_asc' | 'price_desc' | 'newest' | 'oldest'
+  if (sp.sortBy && ['price_asc', 'price_desc', 'newest', 'oldest'].includes(sp.sortBy)) {
+    filters.sortBy = sp.sortBy as 'price_asc' | 'price_desc' | 'newest' | 'oldest'
   }
-  
-  // Replace this section
+
   // Fetch paginated products with filters
   const paginatedCollection = await getCollectionBySlug(
     slug, 
     currentPage, 
     itemsPerPage, 
-    'IN', // Default currency code
+    'inr', // Default currency code
     filters
   )
 
-  // Debug log to see the paginatedCollection
-  console.log("Paginated collection:", paginatedCollection) // Debug log
+  console.log("Paginated Collection:", paginatedCollection);
   
-  // Handle both successful and empty results
+
   let paginatedProducts: any[] = [];
   let totalPages = 0;
+  let availableKeywords: string[] = [];  // Add this line to store keywords
 
   if (paginatedCollection) {
     paginatedProducts = paginatedCollection.data || [];
     totalPages = paginatedCollection.totalPages || 0;
+    availableKeywords = paginatedCollection.keywords || [];  // Extract keywords from response
   }
 
   // Extract collection title and description
@@ -196,9 +196,10 @@ export default async function ProductsPage({
           <div className="md:w-64 lg:w-72">
             <div className="hidden md:block">
               <h2 className="text-xl font-semibold text-[#563635] mb-4">Filters</h2>
-              {/* Pass only current filters to ProductFilters */}
+              {/* Pass current filters and available keywords */}
               <ProductFilters 
-                currentFilters={filters} 
+                currentFilters={filters}
+                availableKeywords={availableKeywords}
               />
             </div>
             <Sheet>
@@ -210,9 +211,10 @@ export default async function ProductsPage({
               </SheetTrigger>
               <SheetContent side="left" className="bg-[#fcf8ed]">
                 <h2 className="text-xl font-semibold text-[#563635] mb-4">Filters</h2>
-                {/* Just pass current filters */}
+                {/* Pass current filters and available keywords */}
                 <ProductFilters 
-                  currentFilters={filters} 
+                  currentFilters={filters}
+                  availableKeywords={availableKeywords}
                 />
               </SheetContent>
             </Sheet>
@@ -221,7 +223,7 @@ export default async function ProductsPage({
           <div id="product-grid" className="flex-1">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl md:text-3xl font-bold text-[#563635]">Our Products</h2>
-              <SortDropdown currentSort={searchParams.sortBy || ''} />
+              <SortDropdown currentSort={sp?.sortBy || ''} />
             </div>
             <p className="text-[#563635]/80 mb-8">
               Discover our unique, personalized gifts that help relive happy memories with friends and family. All
@@ -237,7 +239,7 @@ export default async function ProductsPage({
                     <Pagination 
                       currentPage={currentPage}
                       totalPages={totalPages}
-                      baseUrl={getBaseUrlWithParams(slug, searchParams)}
+                      baseUrl={getBaseUrlWithParams(slug, sp)}
                     />
                   </div>
                 )}
@@ -281,7 +283,7 @@ export default async function ProductsPage({
                   strokeLinejoin="round"
                   className="text-[#b7384e]"
                 >
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                 </svg>
                 Contact Us
               </h3>
@@ -437,12 +439,8 @@ export default async function ProductsPage({
     </div>
   )
 
-  // Add this helper function in your component:
   function getBaseUrlWithParams(slug: string, searchParams: Record<string, any>) {
-    // Create a new search params object excluding 'page'
     const newParams = new URLSearchParams();
-    
-    // Copy all current search params except 'page'
     Object.entries(searchParams).forEach(([key, value]) => {
       if (key !== 'page') {
         if (Array.isArray(value)) {
@@ -452,8 +450,6 @@ export default async function ProductsPage({
         }
       }
     });
-    
-    // Build the base URL with all params except page
     const queryString = newParams.toString();
     return `/collections/${slug}${queryString ? '?' + queryString : ''}`;
   }

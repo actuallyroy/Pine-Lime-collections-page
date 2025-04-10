@@ -14,7 +14,13 @@ interface Product {
   extras?: {
     cost?: number
   }
-  price?: number
+  product_prices?: {
+    [currency: string]: number[] | string | number;
+    sku: string;
+    name: string;
+    max_price: number;
+    min_price: number;
+}
 }
 
 interface ProductGridProps {
@@ -50,10 +56,14 @@ export default function ProductGrid({ products = [] }: ProductGridProps) {
                 {product.title}
               </h3>
               <p className="text-sm text-[#563635]/70 line-clamp-2 mt-1">{product.description}</p>
-              <div className="mt-2 flex justify-between items-center">
+              <div className="mt-2 flex justify-between items-center" >
                 <span className="font-bold text-[#b7384e]">
-                  {product.price 
-                    ? `₹${product.price.toLocaleString('en-IN')}`
+                  {product.product_prices?.inr 
+                    ? Array.isArray(product.product_prices.inr) && product.product_prices.inr.length > 0
+                      ? `₹${product.product_prices.inr[0].toLocaleString('en-IN')}`
+                      : typeof product.product_prices.inr === 'number'
+                        ? `₹${product.product_prices.inr.toLocaleString('en-IN')}`
+                        : 'Price unavailable'
                     : 'Price unavailable'}
                   {product.extras?.cost ? ' +' : ''}
                 </span>

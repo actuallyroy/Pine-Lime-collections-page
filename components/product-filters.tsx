@@ -18,14 +18,6 @@ const productTypes = [
   { id: 'PAIGAAM', label: 'Paigaam' }
 ];
 
-const occasions = [
-  { id: 'anniversary', label: 'Anniversary' },
-  { id: 'birthday', label: 'Birthday' },
-  { id: 'wedding', label: 'Wedding' },
-  { id: 'graduation', label: 'Graduation' },
-  { id: 'housewarming', label: 'Housewarming' }
-];
-
 interface ProductFiltersProps {
   currentFilters: {
     priceRange?: {
@@ -36,9 +28,13 @@ interface ProductFiltersProps {
     keywords?: string[];
     sortBy?: string;
   };
+  availableKeywords?: string[]; // Add this prop
 }
 
-export default function ProductFilters({ currentFilters }: ProductFiltersProps) {
+export default function ProductFilters({ 
+  currentFilters, 
+  availableKeywords = [] // Default to empty array
+}: ProductFiltersProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -156,30 +152,33 @@ export default function ProductFilters({ currentFilters }: ProductFiltersProps) 
       </div>
 
       <div>
-        <h3 className="font-medium mb-3">Occasion</h3>
+        <h3 className="font-medium mb-3">Keywords</h3>
         <div className="space-y-2">
-          {occasions.map((occasion) => {
-            const isChecked = currentKeywords.includes(occasion.id);
+          {availableKeywords.map((keyword) => {
+            const isChecked = currentKeywords.includes(keyword);
             
             return (
-              <div key={occasion.id} className="flex items-center space-x-2">
+              <div key={keyword} className="flex items-center space-x-2">
                 <Checkbox 
-                  id={`occasion-${occasion.id}`} 
+                  id={`keyword-${keyword}`} 
                   checked={isChecked}
                   disabled={isPending}
                   onCheckedChange={(checked) => {
-                    toggleFilter('keyword', occasion.id, Boolean(checked));
+                    toggleFilter('keyword', keyword, Boolean(checked));
                   }}
                 />
                 <label
-                  htmlFor={`occasion-${occasion.id}`}
+                  htmlFor={`keyword-${keyword}`}
                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
-                  {occasion.label}
+                  {keyword.charAt(0).toUpperCase() + keyword.slice(1)}
                 </label>
               </div>
             );
           })}
+          {availableKeywords.length === 0 && (
+            <p className="text-sm text-gray-500">No keywords available</p>
+          )}
         </div>
       </div>
 
