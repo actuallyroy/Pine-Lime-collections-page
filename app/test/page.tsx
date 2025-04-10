@@ -1,5 +1,5 @@
 "use client";
-import { getCollectionBySlug } from "@/lib/supabase/collections";
+import { getSearchSuggestions } from "@/lib/supabase/collections";
 import { useEffect } from "react";
 
 export default function Test() {
@@ -11,13 +11,16 @@ export default function Test() {
   const sortBy = "price_asc"; // Replace with your actual sort option
 
   useEffect(() => {
-    const fetchCollection = async () => {
-      debugger
-      const collectionData = await getCollectionBySlug(slug, page, pageSize, currency, filters);
-      console.log("Collection Data:", collectionData);
+    const fetchData = async () => {
+      try {
+        const response = await getSearchSuggestions("Birthday gifts");
+        console.log("Response:", response);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
     };
 
-    fetchCollection();
+    fetchData();
   }, []); // Empty dependency array to run once on mount
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-gray-100">

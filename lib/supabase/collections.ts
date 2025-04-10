@@ -104,3 +104,63 @@ export async function getCollectionBySlug(
     return null;
   }
 }
+
+/**
+ * Fetches search suggestions based on user input using direct queries
+ * 
+ * @param {string} searchTerm - The partial search term entered by user
+ * @param {number} limit - Maximum number of suggestions to return (default: 5)
+ * @returns {Promise<string[]>} - Array of search suggestions
+ */
+export async function getSearchSuggestions(
+  searchTerm: string,
+  limit: number = 5
+): Promise<string[]> {
+  try {
+    // Return empty array for empty or very short search terms
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      return [];
+    }
+    
+    const term = searchTerm.trim().toLowerCase();
+    
+    // Direct query to find matching titles and keywords
+    const { data, error } = await supabase
+      .from('products')
+      .select('title, keywords')
+      .or(`title.ilike.%${term}%, keywords.ilike.%${term}%`)
+      .limit(limit * 2);  // Fetch more results than needed to account for filtering
+    
+    if (error) {
+      console.error("Error fetching search suggestions:", error);
+      return [];
+    }
+    
+    // Extract and deduplicate suggestions from titles and keywords
+    const suggestions = new Set<string>();
+    
+    if (data) {
+      data.forEach(item => {
+        if (item.title && item.title.toLowerCase().includes(term)) {
+          suggestions.add(item.title);
+        }
+        
+        if (item.keywords) {
+          const keywordsList = item.keywords.split(',').map((k: string) => k.trim());
+          keywordsList.forEach((keyword: string) => {
+            if (keyword.toLowerCase().includes(term)) {
+              suggestions.add(keyword);
+            }
+          });
+        }
+      });
+    }
+    
+    return Array.from(suggestions).slice(0, limit);
+  } catch (error) {
+    console.error("Error in search suggestions:", error);
+    return [];
+  }
+}
+
+
