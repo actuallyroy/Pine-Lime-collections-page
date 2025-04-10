@@ -13,6 +13,7 @@ import ScrollManagerWrapper from '@/components/scroll-manager-wrapper'
 import SearchInput from "@/components/search-input"
 import Footer from "@/components/footer"
 import ScrollToProductsButton from "@/components/scroll-to-products-button"
+import TestimonialSlider from "@/components/testimonial-slider"
 
 interface FilterParams {
   priceRange?: { min?: number; max?: number };
@@ -105,6 +106,25 @@ export default async function ProductsPage({
   const collectionTitle = slug.split("-").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
   const collectionDescription = "Find the perfect gift that will make their day unforgettable and strengthen your bond.";
   
+  // Define testimonials data
+  const testimonials = [
+    {
+      title: "Memory Map",
+      quote: "Received the most amazing gift ever.. special mention for your speed delivery and awesome packing.. the product was beyond the expectation. Didn't expect such a wonderful gift. Thank you so much for the best memory map",
+      author: "Amreta Y"
+    },
+    {
+      title: "Natural Light Portrait",
+      quote: "Pime and lime y'all are simply amazing ..... I loved the frame completely and the way it was packed and sent to me❤️. It was so perfect and I couldn't pack it the same way again but I tried. It's so perfect and at such a reasonable price. Thank you so much for this",
+      author: "Neville Vincent"
+    },
+    {
+      title: "Mother and a Child",
+      quote: "Delivery time was perfect. I received within 3-4 days. I absolutely loved the sturdy and minimalist packing and the quality of the frame and photos were top notch. I would definitely recommend everyone to check pine and lime who are looking to frame their beautiful memories forever.",
+      author: "Priyanka Dwivedi"
+    }
+  ];
+
   return (
     <div className="bg-[#fcf8ed] min-h-screen">
       {/* Use the client wrapper directly */}
@@ -143,7 +163,7 @@ export default async function ProductsPage({
         </div>
       </header>
 
-      {/* Hero section updated */}
+      {/* Hero section updated with testimonial slider */}
       <div className="bg-[#563635] text-white py-10 px-4 relative">
         <div className="container mx-auto">
           <div className="max-w-4xl mx-auto text-center">
@@ -162,33 +182,8 @@ export default async function ProductsPage({
               </a>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-6 mt-8">
-              <div className="bg-white/10 p-6 rounded-lg">
-                <h3 className="font-semibold text-xl mb-2">Memory Map</h3>
-                <p className="text-white/80 mb-4">
-                  "Received the most amazing gift ever.. special mention for your speed delivery and awesome packing.. the product was beyond the expectation. Didn't expect such a wonderful gift. Thank you so much for the best memory map"
-                  <span className="block mt-2 text-sm italic">— Amreta Y</span>
-                </p>
-              </div>
-
-              <div className="bg-white/10 p-6 rounded-lg">
-                <h3 className="font-semibold text-xl mb-2">Natural Light Portrait</h3>
-                <p className="text-white/80 mb-4">
-                  "Pime and lime y'all are simply amazing ..... I loved the frame completely and the way it was packed and sent to me❤️. It was so perfect and I couldn't pack it the same way again but I tried. It's so perfect and at such a reasonable price. Thank you so much for this"
-                  <span className="block mt-2 text-sm italic">— Neville Vincent</span>
-                </p>
-              </div>
-
-              <div className="bg-white/10 p-6 rounded-lg">
-                <h3 className="font-semibold text-xl mb-2">Mother and a Child</h3>
-                <p className="text-white/80 mb-4">
-                  "Delivery time was perfect. I received within 3-4 days. I absolutely loved the sturdy and minimalist packing and the quality of the frame and photos were top notch. I would definitely recommend everyone to check pine and lime who are looking to frame their beautiful memories forever."
-                  <span className="block mt-2 text-sm italic">— Priyanka Dwivedi</span>
-                </p>
-              </div>
-            </div>
-            
-            {/* Remove the fixed button since it's now in ScrollToProductsButton component */}
+            {/* Replace grid with slider */}
+            <TestimonialSlider testimonials={testimonials} />
           </div>
         </div>
       </div>
