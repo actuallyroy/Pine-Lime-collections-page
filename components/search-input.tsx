@@ -52,7 +52,7 @@ export default function SearchInput() {
 
   const handleSearch = (term: string) => {
     if (!term.trim()) return;
-    router.push(``);
+    router.push(`/collections/${term.toLocaleLowerCase().replace(/\s+/g, "-")}`);
     setShowSuggestions(false);
   };
 

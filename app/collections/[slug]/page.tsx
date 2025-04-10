@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import ProductFilters from "@/components/product-filters"
 import Image from "next/image"
-import { getCollectionBySlug } from "@/lib/supabase/collections"
+import { CollectionItem, getCollectionBySlug } from "@/lib/supabase/collections"
 import Pagination from "@/components/pagination"
 import SortDropdown from '@/components/sort-dropdown'
 import ScrollManagerWrapper from '@/components/scroll-manager-wrapper'
@@ -100,6 +100,36 @@ export default async function ProductsPage({
     paginatedProducts = paginatedCollection.data || [];
     totalPages = paginatedCollection.totalPages || 0;
     availableKeywords = paginatedCollection.keywords || [];  // Extract keywords from response
+  }
+
+  // Define products order
+  const productsOrder = ["HAMPER", "MEMORY_MAP", "REWIND", "REFLECTION", "JOURNEY_MAP", "MUG", "MAGNET", "VINTAGE_POSTER", "DECOR_MAP", "GAME", "ROCKET_RUN"];
+
+  // Function to arrange products in specific order
+  function arrange(data: CollectionItem[], productsOrder: string[]): CollectionItem[] {
+    let obj: Record<string, CollectionItem[]> = {};
+    let lengths: number[] = [];
+    productsOrder.forEach((product) => {
+      obj[product] = data.filter((item) => item.product_code === product);
+      lengths.push(obj[product].length);
+    });
+    
+    let arr: CollectionItem[] = [];
+    for (let i = 0; i < Math.max(...lengths); i++) {
+      productsOrder.forEach((product) => {
+        let productItems = obj[product];
+        if (productItems.length > 0) {
+          arr.push(productItems[productItems.length - 1]);
+          productItems.pop();
+        }
+      });
+    }
+    return arr;
+  }
+
+  // If products exist, arrange them in the specified order
+  if (paginatedProducts.length > 0) {
+    paginatedProducts = arrange(paginatedProducts, productsOrder);
   }
 
   // Extract collection title and description
