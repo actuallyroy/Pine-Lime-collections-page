@@ -127,8 +127,8 @@ export async function getSearchSuggestions(
     // Direct query to find matching titles and keywords
     const { data, error } = await supabase
       .from('tags') // Limited it to collections only TODO: Include product suggestions in future
-      .select('name, keywords')
-      .or(`title.ilike.%${term}%, keywords.ilike.%${term}%`)
+      .select('name')
+      .or(`name.ilike.%${term}%`)
       .limit(limit * 2);  // Fetch more results than needed to account for filtering
     
     if (error) {
@@ -143,15 +143,6 @@ export async function getSearchSuggestions(
       data.forEach(item => {
         if (item.name && item.name.toLowerCase().includes(term)) {
           suggestions.add(item.name);
-        }
-        
-        if (item.keywords) {
-          const keywordsList = item.keywords.split(',').map((k: string) => k.trim());
-          keywordsList.forEach((keyword: string) => {
-            if (keyword.toLowerCase().includes(term)) {
-              suggestions.add(keyword);
-            }
-          });
         }
       });
     }
