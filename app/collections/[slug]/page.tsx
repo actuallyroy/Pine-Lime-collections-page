@@ -12,7 +12,7 @@ import SortDropdown from '@/components/sort-dropdown'
 import ScrollManagerWrapper from '@/components/scroll-manager-wrapper'
 import SearchInput from "@/components/search-input"
 import Footer from "@/components/footer"
-import ScrollToProductsButton from "@/components/scroll-to-products-button"
+import TrustBadges from "@/components/trust-badges"
 import TestimonialSlider from "@/components/testimonial-slider"
 
 interface FilterParams {
@@ -129,7 +129,6 @@ export default async function ProductsPage({
     <div className="bg-[#fcf8ed] min-h-screen">
       {/* Use the client wrapper directly */}
       <ScrollManagerWrapper />
-      <ScrollToProductsButton />
       
       {/* Header remains unchanged */}
       <header className="border-b border-[#563635]/10">
@@ -163,12 +162,16 @@ export default async function ProductsPage({
         </div>
       </header>
 
-      {/* Hero section updated with testimonial slider */}
+      {/* Hero section updated with trust badges */}
       <div className="bg-[#563635] text-white py-10 px-4 relative">
         <div className="container mx-auto">
           <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-3xl md:text-4xl font-bold mb-4">{collectionTitle}</h1>
-            <p className="text-white/90 text-lg mb-6">
+            <h1 className="text-3xl md:text-4xl font-bold mb-2">{collectionTitle}</h1>
+            
+            {/* Add trust badges below the collection title */}
+            <TrustBadges />
+            
+            <p className="text-white/90 text-lg mb-6 mt-4">
               {collectionDescription}
             </p>
 
@@ -181,9 +184,6 @@ export default async function ProductsPage({
                 Skip to Products
               </a>
             </div>
-
-            {/* Replace grid with slider */}
-            <TestimonialSlider testimonials={testimonials} />
           </div>
         </div>
       </div>
@@ -249,6 +249,27 @@ export default async function ProductsPage({
                 </Link>
               </div>
             )}
+            
+            {/* Add customer reviews section below products with proper background */}
+            <div className="mt-16">
+              <h2 className="text-2xl md:text-3xl font-bold text-[#563635] text-center mb-8">What Our Customers Say</h2>
+              
+              {/* Mobile view: Keep slider */}
+              <div className="md:hidden bg-[#563635] py-8 px-4 rounded-lg">
+                <TestimonialSlider testimonials={testimonials} />
+              </div>
+              
+              {/* Desktop view: Horizontal layout */}
+              <div className="hidden md:grid md:grid-cols-3 gap-6">
+                {testimonials.map((testimonial, index) => (
+                  <div key={index} className="bg-[#563635] p-6 rounded-lg text-white">
+                    <h3 className="font-semibold text-xl mb-4">{testimonial.title}</h3>
+                    <p className="text-white/80 mb-4">"{testimonial.quote}"</p>
+                    <p className="text-sm italic">— {testimonial.author}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -46,7 +46,7 @@ export default function TestimonialSlider({ testimonials }: TestimonialSliderPro
   return (
     <div className="relative px-4 py-8">
       <div className="max-w-xl mx-auto bg-white/10 p-6 md:p-8 rounded-lg min-h-[250px] flex flex-col justify-between">
-        <h3 className="font-semibold text-xl md:text-2xl mb-4">
+        <h3 className="font-semibold text-xl md:text-2xl mb-4 text-white">
           {testimonials[currentIndex].title}
         </h3>
         
@@ -54,7 +54,7 @@ export default function TestimonialSlider({ testimonials }: TestimonialSliderPro
           <p className="text-white/80">
             "{testimonials[currentIndex].quote}"
           </p>
-          <p className="mt-4 text-sm italic">— {testimonials[currentIndex].author}</p>
+          <p className="mt-4 text-sm italic text-white">— {testimonials[currentIndex].author}</p>
         </div>
         
         <div className="flex justify-between items-center mt-6">
