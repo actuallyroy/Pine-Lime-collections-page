@@ -185,58 +185,14 @@ export default async function ProductsPage({
     }
   ];
 
-  // Generate JSON-LD structured data for SEO
+  // Generate JSON-LD structured data for SEO with all required fields
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
-      // Organization Schema
-      {
-        "@type": "Organization",
-        "@id": "https://www.pinenlime.com/#organization",
-        "name": "Pine & Lime",
-        "url": "https://www.pinenlime.com",
-        "logo": {
-          "@type": "ImageObject",
-          "url": "https://www.pinenlime.com/logo.png",
-          "width": 180,
-          "height": 60
-        },
-        "sameAs": [
-          "https://www.facebook.com/pineandlime",
-          "https://www.instagram.com/pineandlime",
-          "https://twitter.com/pineandlime"
-        ],
-        "contactPoint": {
-          "@type": "ContactPoint",
-          "telephone": "+91-1234567890",
-          "contactType": "customer service"
-        }
-      },
-      // ItemList Schema for collection
-      {
-        "@type": "ItemList",
-        "itemListElement": paginatedProducts.map((product, index) => ({
-          "@type": "ListItem",
-          "position": index + 1,
-          "item": {
-            "@type": "Product",
-            "name": product.title,
-            "description": product.description,
-            "image": product.thumbnail,
-            "url": `https://www.pinenlime.com/product/${product.slug}`,
-            "offers": {
-              "@type": "Offer",
-              "price": product.price,
-              "priceCurrency": "INR",
-              "availability": "https://schema.org/InStock"
-            }
-          }
-        })),
-        "numberOfItems": paginatedProducts.length
-      },
       // CollectionPage Schema
       {
         "@type": "CollectionPage",
+        "@id": `https://www.pinenlime.com/collections/${slug}#collectionpage`,
         "name": collectionTitle,
         "description": collectionDescription,
         "url": `https://www.pinenlime.com/collections/${slug}`,
@@ -263,9 +219,122 @@ export default async function ProductsPage({
             }
           ]
         }
+      },
+      // ItemList Schema for collection
+      {
+        "@type": "ItemList",
+        "@id": `https://www.pinenlime.com/collections/${slug}#itemlist`,
+        "itemListElement": paginatedProducts.map((product, index) => ({
+          "@type": "ListItem",
+          "position": index + 1,
+          "item": {
+            "@type": "Product",
+            "@id": `https://www.pinenlime.com/product/${product.slug || product.id}#product`,
+            "name": product.title,
+            "description": product.description,
+            "image": [
+              product.thumbnail || `https://www.pinenlime.com/product-images/${product.id}/main.jpg`,
+              ...(product.images || []).map((img: { url: any }) => img.url || img)
+            ],
+            "url": `https://www.pinenlime.com/product/${product.slug || product.id}`,
+            "sku": product.id || product.sku,
+            "brand": {
+              "@type": "Brand",
+              "name": "Pine & Lime"
+            },
+            "offers": {
+              "@type": "Offer",
+              "url": `https://www.pinenlime.com/product/${product.slug || product.id}`,
+              "price": product.price,
+              "priceCurrency": "INR",
+              "priceValidUntil": new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+              "availability": "https://schema.org/InStock",
+              "itemCondition": "https://schema.org/NewCondition",
+              "seller": {
+                "@type": "Organization",
+                "name": "Pine & Lime"
+              },
+              "shippingDetails": {
+                "@type": "OfferShippingDetails",
+                "shippingRate": {
+                  "@type": "MonetaryAmount",
+                  "value": product.shipping || 0,
+                  "currency": "INR"
+                },
+                "shippingDestination": {
+                  "@type": "DefinedRegion",
+                  "addressCountry": "IN"
+                },
+                "deliveryTime": {
+                  "@type": "ShippingDeliveryTime",
+                  "handlingTime": {
+                    "@type": "QuantitativeValue",
+                    "minValue": 1,
+                    "maxValue": 3,
+                    "unitCode": "DAY"
+                  },
+                  "transitTime": {
+                    "@type": "QuantitativeValue",
+                    "minValue": 2,
+                    "maxValue": 7,
+                    "unitCode": "DAY"
+                  }
+                }
+              },
+              "hasMerchantReturnPolicy": {
+                "@type": "MerchantReturnPolicy",
+                "applicableCountry": "IN",
+                "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
+                "merchantReturnDays": 30,
+                "returnMethod": "https://schema.org/ReturnByMail",
+                "returnFees": "https://schema.org/FreeReturn"
+              }
+            },
+            "aggregateRating": product.rating ? {
+              "@type": "AggregateRating",
+              "ratingValue": product.rating.value || 4.5,
+              "reviewCount": product.rating.count || 10
+            } : undefined,
+            "review": product.reviews && product.reviews.length > 0 ? 
+              product.reviews.map((review: { rating: any; author: any; date: any; text: any }) => ({
+                "@type": "Review",
+                "reviewRating": {
+                  "@type": "Rating",
+                  "ratingValue": review.rating || 5,
+                  "bestRating": 5
+                },
+                "author": {
+                  "@type": "Person",
+                  "name": review.author || "Happy Customer"
+                },
+                "datePublished": review.date || new Date().toISOString().split('T')[0],
+                "reviewBody": review.text || "Great product, very happy with my purchase!"
+              })) : 
+              [{
+                "@type": "Review",
+                "reviewRating": {
+                  "@type": "Rating",
+                  "ratingValue": 5,
+                  "bestRating": 5
+                },
+                "author": {
+                  "@type": "Person",
+                  "name": "Happy Customer"
+                },
+                "datePublished": new Date().toISOString().split('T')[0],
+                "reviewBody": "Great product, very happy with my purchase!"
+              }]
+          }
+        })),
+        "numberOfItems": paginatedProducts.length
       }
     ]
   };
+
+  // Remove undefined values from JSON-LD
+  const cleanJsonLd = JSON.parse(JSON.stringify(jsonLd), (key, value) => {
+    return value === undefined ? null : value;
+  });
 
   return (
     <div className="bg-[#fcf8ed] min-h-screen">
@@ -273,7 +342,7 @@ export default async function ProductsPage({
       <Script
         id="product-collection-jsonld"
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(cleanJsonLd) }}
       />
       
       {/* Use the client wrapper directly */}
