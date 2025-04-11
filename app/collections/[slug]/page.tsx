@@ -1,12 +1,11 @@
-import { Filter, Search } from "lucide-react"
+import { Filter } from "lucide-react"
 import Link from "next/link"
 import ProductGrid from "@/components/product-grid"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import ProductFilters from "@/components/product-filters"
 import Image from "next/image"
-import { CollectionItem, getCollectionBySlug } from "@/lib/supabase/collections"
+import { getCollectionBySlug } from "@/lib/supabase/collections"
 import Pagination from "@/components/pagination"
 import SortDropdown from '@/components/sort-dropdown'
 import ScrollManagerWrapper from '@/components/scroll-manager-wrapper'
@@ -14,12 +13,73 @@ import SearchInput from "@/components/search-input"
 import Footer from "@/components/footer"
 import TrustBadges from "@/components/trust-badges"
 import TestimonialSlider from "@/components/testimonial-slider"
+import { Metadata, ResolvingMetadata } from "next/types"
+import Script from "next/script"
 
 interface FilterParams {
   priceRange?: { min?: number; max?: number };
   productCodes?: string[];
   keywords?: string[];
   sortBy?: 'price_asc' | 'price_desc' | 'newest' | 'oldest';
+}
+
+// Generate dynamic metadata
+export async function generateMetadata(
+  { params }: { params: { slug: string } },
+  parent: ResolvingMetadata
+): Promise<Metadata> {
+  // Format the collection title
+  const formattedTitle = params.slug
+    .split("-")
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+  
+  // Get collection description or use default
+  const collectionDescription = "Find the perfect gift that will make their day unforgettable and strengthen your bond. Discover unique, personalized products from Pine & Lime's exclusive collection.";
+  
+  // Base keywords + add collection specific ones
+  const keywords = [
+    "personalized gifts", 
+    "custom gifts", 
+    "memory gifts", 
+    "photo gifts", 
+    "Pine and Lime",
+    ...params.slug.split("-")
+  ];
+  
+  // Get the parent metadata (to maintain any existing metadata)
+  const previousMetadata = await parent;
+  
+  return {
+    title: `${formattedTitle} | Pine & Lime`,
+    description: collectionDescription,
+    keywords: keywords,
+    openGraph: {
+      title: `${formattedTitle} | Pine & Lime`,
+      description: collectionDescription,
+      url: `https://www.pinenlime.com/collections/${params.slug}`,
+      siteName: 'Pine & Lime',
+      images: [
+        {
+          url: 'https://static.wixstatic.com/media/9fba21_2f376f9bf7fe4daba31b28ce31cd6232~mv2.jpg',
+          width: 1200,
+          height: 630,
+          alt: `Pine & Lime ${formattedTitle} Collection`
+        }
+      ],
+      locale: 'en_US',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${formattedTitle} | Pine & Lime Gifts Collection`,
+      description: collectionDescription,
+      images: ['https://www.pinenlime.com/og-image.jpg'],
+    },
+    alternates: {
+      canonical: `https://www.pinenlime.com/collections/${params.slug}`
+    }
+  };
 }
 
 export default async function ProductsPage({
@@ -125,8 +185,97 @@ export default async function ProductsPage({
     }
   ];
 
+  // Generate JSON-LD structured data for SEO
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      // Organization Schema
+      {
+        "@type": "Organization",
+        "@id": "https://www.pinenlime.com/#organization",
+        "name": "Pine & Lime",
+        "url": "https://www.pinenlime.com",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://www.pinenlime.com/logo.png",
+          "width": 180,
+          "height": 60
+        },
+        "sameAs": [
+          "https://www.facebook.com/pineandlime",
+          "https://www.instagram.com/pineandlime",
+          "https://twitter.com/pineandlime"
+        ],
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "telephone": "+91-1234567890",
+          "contactType": "customer service"
+        }
+      },
+      // ItemList Schema for collection
+      {
+        "@type": "ItemList",
+        "itemListElement": paginatedProducts.map((product, index) => ({
+          "@type": "ListItem",
+          "position": index + 1,
+          "item": {
+            "@type": "Product",
+            "name": product.title,
+            "description": product.description,
+            "image": product.thumbnail,
+            "url": `https://www.pinenlime.com/product/${product.slug}`,
+            "offers": {
+              "@type": "Offer",
+              "price": product.price,
+              "priceCurrency": "INR",
+              "availability": "https://schema.org/InStock"
+            }
+          }
+        })),
+        "numberOfItems": paginatedProducts.length
+      },
+      // CollectionPage Schema
+      {
+        "@type": "CollectionPage",
+        "name": collectionTitle,
+        "description": collectionDescription,
+        "url": `https://www.pinenlime.com/collections/${slug}`,
+        "breadcrumb": {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://www.pinenlime.com"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Collections",
+              "item": "https://www.pinenlime.com/collections"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": collectionTitle,
+              "item": `https://www.pinenlime.com/collections/${slug}`
+            }
+          ]
+        }
+      }
+    ]
+  };
+
   return (
     <div className="bg-[#fcf8ed] min-h-screen">
+      {/* JSON-LD structured data */}
+      <Script
+        id="product-collection-jsonld"
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      
       {/* Use the client wrapper directly */}
       <ScrollManagerWrapper />
       
@@ -155,7 +304,7 @@ export default async function ProductsPage({
             <div className="relative hidden md:block w-80">
               <SearchInput />
             </div>
-            <Link href="https://www.pinenlime.com/shopping-cart" className="hidden md:flex items-center gap-2">
+            <Link href="https://www.pinenlime.com/shoppingcart" className="hidden md:flex items-center gap-2">
               <Button className="bg-[#b7384e] hover:bg-[#b7384e]/90 text-white">Cart</Button>
             </Link>
           </div>
