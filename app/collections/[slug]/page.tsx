@@ -1,6 +1,5 @@
 import { Filter } from "lucide-react"
 import Link from "next/link"
-import ProductGrid from "@/components/product-grid"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import ProductFilters from "@/components/product-filters"
@@ -15,6 +14,11 @@ import TrustBadges from "@/components/trust-badges"
 import TestimonialSlider from "@/components/testimonial-slider"
 import { Metadata, ResolvingMetadata } from "next/types"
 import Script from "next/script"
+import MetaPixelScript from "@/components/meta-pixel-script"
+import ProductCardClient from "@/components/product-card-client"
+
+// Define Facebook Pixel ID
+const FB_PIXEL_ID = process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID || '123456789012345'
 
 interface FilterParams {
   priceRange?: { min?: number; max?: number };
@@ -87,19 +91,16 @@ export default async function ProductsPage({
   searchParams,
 }: {
   params: { slug: string },
-  searchParams: { 
-    page?: string; 
-    perPage?: string;
-    priceMin?: string;
-    priceMax?: string;
-    productCode?: string | string[];
-    keyword?: string | string[];
-    sortBy?: string;
-  }
+  searchParams: Record<string, any>
 }) {
-  // Await the incoming params/seachParams
+  // Await the incoming params/searchParams
   const sp = await Promise.resolve(searchParams)
   const p = await Promise.resolve(params)
+
+  // Extract any UTM parameters from the URL (e.g., utm_source, utm_medium, etc.)
+  const utmParams = Object.entries(sp)
+    .filter(([key]) => key.startsWith("utm_"))
+    .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
 
   // Parse pagination parameters from URL
   const currentPage = Number(sp.page) || 1
@@ -336,8 +337,21 @@ export default async function ProductsPage({
     return value === undefined ? null : value;
   });
 
+  // Extract product IDs for Meta Pixel
+  const productIds = paginatedProducts.map(product => product.new_sku);
+
   return (
     <div className="bg-[#fcf8ed] min-h-screen">
+      {/* Meta Pixel Component (Client-side) */}
+      <MetaPixelScript 
+        fbPixelId={FB_PIXEL_ID} 
+        pageData={{
+          collectionTitle,
+          productIds,
+          utmParams // include UTM parameters with the event data
+        }} 
+      />
+      
       {/* JSON-LD structured data */}
       <Script
         id="product-collection-jsonld"
@@ -448,7 +462,16 @@ export default async function ProductsPage({
             {/* Show products or no products message */}
             {paginatedProducts.length > 0 ? (
               <>
-                <ProductGrid products={paginatedProducts} />
+                {/* Use grid layout with client components */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {paginatedProducts.map((product) => (
+                    <ProductCardClient 
+                      key={product.id} 
+                      product={product} 
+                      collectionTitle={collectionTitle}
+                    />
+                  ))}
+                </div>
                 {totalPages > 1 && (
                   <div className="mt-8">
                     <Pagination 
