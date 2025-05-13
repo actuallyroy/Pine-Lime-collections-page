@@ -38,6 +38,8 @@ export default function JourneyMapPage() {
 
   // Handle scroll for sticky add to cart on mobile
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     const handleScroll = () => {
       const scrollPosition = window.scrollY;
       setIsSticky(scrollPosition > 500);
@@ -129,9 +131,14 @@ export default function JourneyMapPage() {
     if (!hasPreviewedMap && markers.length > 0) {
       setShowPreviewWarning(true);
       // Scroll to warning
-      setTimeout(() => {
-        document.getElementById("preview-warning")?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          const warningElement = document.getElementById("preview-warning");
+          if (warningElement) {
+            warningElement.scrollIntoView({ behavior: "smooth" });
+          }
+        }, 100);
+      }
     } else {
       // Add to cart logic here
       console.log("Adding to cart:", { markers, mapTitle, mapData, frame, size });

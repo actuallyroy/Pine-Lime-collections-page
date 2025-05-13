@@ -11,7 +11,9 @@ import * as turf from "@turf/turf"
 
 // Use a mapbox token from env or fallback to a public token
 const mbToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || 'pk.eyJ1IjoicGluZW5saW5lIiwiYSI6ImNrN3N6eTQ0bzByNmgzbXBsdmlwY25reDIifQ.QZROImVZfGk44ZIJLlYXQg'
-mapboxgl.accessToken = mbToken
+if (typeof window !== 'undefined') {
+  mapboxgl.accessToken = mbToken
+}
 
 // Define marker sizes
 const sizeMap = {
@@ -359,39 +361,43 @@ function MapboxMapInner({
           
           // Add markers after map is loaded
           markers.forEach((marker) => {
-            let markerElement: HTMLElement;
+            let markerElement: HTMLElement | null = null;
             const dataUrl = generateMarkerImg(
               marker.markerEmoji!,
               marker.markerLabel!,
               sizeMap[marker.markerSize]
             );
-            const img = document.createElement("img");
-            img.src = dataUrl || "";
-            img.className = "marker";
-            img.height = sizeMap[marker.markerSize];
-            markerElement = img;
+            const img = typeof document !== 'undefined' ? document.createElement("img") : null;
+            if (img) {
+              img.src = dataUrl || "";
+              img.className = "marker";
+              img.height = sizeMap[marker.markerSize];
+              markerElement = img;
+            }
 
-            // Create popup
-            const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
-              <h3 class="font-bold">${marker.markerLabel || ""}</h3>
-            `)
+            if (markerElement) {
+              // Create popup
+              const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+                <h3 class="font-bold">${marker.markerLabel || ""}</h3>
+              `)
 
-            // Add marker to map
-            const mapboxMarker = new mapboxgl.Marker(markerElement)
-              .setLngLat(marker.markerCoordinates)
-              .setPopup(popup)
-              .addTo(mapInstance)
+              // Add marker to map
+              const mapboxMarker = new mapboxgl.Marker(markerElement)
+                .setLngLat(marker.markerCoordinates)
+                .setPopup(popup)
+                .addTo(mapInstance)
 
-            // Store marker reference
-            markersRef.current.push(mapboxMarker)
+              // Store marker reference
+              markersRef.current.push(mapboxMarker)
 
-            // Add click handler
-            markerElement.addEventListener("click", (e) => {
-              e.stopPropagation();
-              if (onMarkerClick) {
-                onMarkerClick(marker.markerId)
-              }
-            })
+              // Add click handler
+              markerElement.addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (onMarkerClick) {
+                  onMarkerClick(marker.markerId)
+                }
+              })
+            }
           })
         }
       })
@@ -491,38 +497,42 @@ function MapboxMapInner({
 
       // Add new markers
       markers.forEach((marker) => {
-        let markerElement: HTMLElement;
+        let markerElement: HTMLElement | null = null;
           const dataUrl = generateMarkerImg(
             marker.markerEmoji!,
             marker.markerLabel!,
             sizeMap[marker.markerSize]
           );
-          const img = document.createElement("img");
-          img.src = dataUrl || "";
-          img.className = "marker";
-          img.height = sizeMap[marker.markerSize];
-          markerElement = img;
-        // Create popup
-        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
-          <h3 class="font-bold">${marker.markerLabel || ""}</h3>
-        `)
-
-        // Add marker to map
-        const mapboxMarker = new mapboxgl.Marker(markerElement)
-          .setLngLat(marker.markerCoordinates)
-          .setPopup(popup)
-          .addTo(map.current!)
-
-        // Store marker reference
-        markersRef.current.push(mapboxMarker)
-
-        // Add click handler
-        markerElement.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (onMarkerClick) {
-            onMarkerClick(marker.markerId)
+          const img = typeof document !== 'undefined' ? document.createElement("img") : null;
+          if (img) {
+            img.src = dataUrl || "";
+            img.className = "marker";
+            img.height = sizeMap[marker.markerSize];
+            markerElement = img;
           }
-        })
+        if (markerElement) {
+          // Create popup
+          const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+            <h3 class="font-bold">${marker.markerLabel || ""}</h3>
+          `)
+
+          // Add marker to map
+          const mapboxMarker = new mapboxgl.Marker(markerElement)
+            .setLngLat(marker.markerCoordinates)
+            .setPopup(popup)
+            .addTo(map.current!)
+
+          // Store marker reference
+          markersRef.current.push(mapboxMarker)
+
+          // Add click handler
+          markerElement.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (onMarkerClick) {
+              onMarkerClick(marker.markerId)
+            }
+          })
+        }
       })
     } catch (error) {
       console.error("Error updating markers:", error)
