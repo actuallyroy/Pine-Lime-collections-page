@@ -2,6 +2,8 @@
  * Map utility functions for working with static maps
  */
 
+import { EmojiStyle } from "emoji-picker-react";
+
 /**
  * Projects geographical coordinates to pixel coordinates on a static map
  * This is a simplified implementation of the Mapbox GL JS project function
@@ -57,6 +59,40 @@ export function projectCoordinatesToPixels(
     height / 2 + dy
   ];
 }
+
+// Add marker image generation function
+export const generateMarkerImg = (emojiTxt: string, label: string, size: number = 20, labelFont: string = "Arial", emojiStyle: EmojiStyle = EmojiStyle.GOOGLE) => {
+  const canvas = document.createElement("canvas");
+  let fontSize = size * 0.6;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.font = `${fontSize}px ${labelFont}`;
+  const labelMetrics = ctx.measureText(label);
+  const textWidth = labelMetrics.width + 20;
+  let emojiY = size * 0.9;
+
+  let textHeight = size * 0.92;
+
+  const emojiFont = emojiStyle === EmojiStyle.APPLE ? "Apple Color Emoji" : "Noto Color Emoji";
+  ctx.font = `${size}px "${emojiFont}"`;
+  const emojiMetrics = ctx.measureText(emojiTxt);
+  const emojiWidth = emojiMetrics.width;
+
+  canvas.height = textHeight + size + 20;
+  canvas.width = Math.max(emojiWidth, textWidth);
+
+  ctx.font = `${size}px "${emojiFont}"`;
+  ctx.fillText(emojiTxt, textWidth / 2 - emojiWidth / 2 < 0 ? 0 : textWidth / 2 - emojiWidth / 2, emojiY);
+  ctx.font = `${fontSize}px ${labelFont}`;
+  ctx.strokeStyle = "white"; // Outline color
+  ctx.lineWidth = 8; // Outline width
+  ctx.lineJoin = "round";
+  ctx.strokeText(label, 10, size + size * 0.72);
+  ctx.fillText(label, 10, size + size * 0.72);
+
+  return canvas.toDataURL();
+};
 
 /**
  * Calculates the bounds of a map given its center and zoom level

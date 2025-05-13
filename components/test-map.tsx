@@ -8,12 +8,26 @@ mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
 
 export default function MapboxMap(
   { 
+    markers = [],
     intrinsicHeight = "8in",
     intrinsicWidth = "8in",
     visibleHeight = "500px",
     visibleWidth = "500px",
     getZoom = () => 12
   }: {
+    markers?: Array<{
+      id: string
+      coordinates: [number, number]
+      title?: string
+      description?: string
+      customMarker?: {
+        element: HTMLElement
+        options: {
+          element: HTMLElement
+        }
+      }
+      isDragging?: boolean // Add this flag to indicate if marker should stay centered
+    }>,
     intrinsicHeight?: string;
     intrinsicWidth?: string;
     visibleHeight?: string;
@@ -89,6 +103,67 @@ export default function MapboxMap(
       });
     }
   }, []);
+
+    // Update markers when they change
+    useEffect(() => {
+      if (!mapRef.current || !mapLoaded) return
+  
+      try {  
+        // Add new markers
+        markers.forEach((marker) => {
+          let markerElement: HTMLElement;
+          
+          if (marker.customMarker) {
+            // Use custom marker element
+            markerElement = marker.customMarker.options.element;
+          } else {
+            // Create default marker element
+            markerElement = document.createElement("div")
+            markerElement.className = "marker"
+            markerElement.style.width = "30px"
+            markerElement.style.height = "30px"
+            markerElement.style.backgroundImage = "url('/map-marker.svg')"
+            markerElement.style.backgroundSize = "cover"
+            markerElement.style.cursor = "pointer"
+          }
+  
+          // Create popup
+          const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+            <h3 class="font-bold">${marker.title || ""}</h3>
+            <p>${marker.description || ""}</p>
+          `)
+  
+          // Add marker to map
+          const mapboxMarker = new mapboxgl.Marker(markerElement)
+            .setLngLat(marker.coordinates)
+            .setPopup(popup)
+            .addTo(map.current!)
+  
+          // Store marker reference
+          markersRef.current.push(mapboxMarker)
+  
+          // Add click handler
+          markerElement.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (onMarkerClick) {
+              onMarkerClick(marker.id)
+            }
+          })
+        })
+      } catch (error) {
+        console.error("Error updating markers:", error)
+      }
+    }, [markers, mapLoaded, onMarkerClick])
+
+  useEffect(() => {
+    if (mapRef.current) {
+      mapRef.current.on("load", () => {
+        markers.forEach((marker) => {
+          mapRef.current?
+        });
+      });
+    }
+  }, [markers]);
 
   return (
     <div style={{ width: visibleWidth, height: visibleHeight, overflow: "hidden" }}>

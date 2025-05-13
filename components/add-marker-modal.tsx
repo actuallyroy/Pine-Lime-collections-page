@@ -10,70 +10,29 @@ import MapboxMap from "./mapbox-map"
 import mapboxgl from "mapbox-gl"
 // Set the Mapbox access token for Geocoding API
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
-import EmojiPicker from 'emoji-picker-react'
-
-// Define the shape of a marker for add and update
-type MarkerData = {
-  emoji: string;
-  label: string;
-  location: string;
-  position: { x: number; y: number };
-  markerImage?: string;
-  size: "small" | "medium" | "large";
-};
+import EmojiPicker, { EmojiStyle } from 'emoji-picker-react'
+import { generateMarkerImg } from "@/lib/map-utils"
 
 interface AddMarkerModalProps {
   onClose: () => void
-  onAddMarker: (marker: MarkerData) => void
-  initialMarker?: MarkerData
-  onUpdateMarker?: (marker: MarkerData) => void
+  onAddMarker: (marker: Marker) => void
+  initialMarker?: Marker
+  onUpdateMarker?: (marker: Marker) => void
 }
 
 // Create a memoized version of MapboxMap to prevent unnecessary rerenders
 const MemoizedMapboxMap = memo(MapboxMap);
 
-// Add marker image generation function
-const generateMarkerImg = (emojiTxt: string, label: string, size: number = 40, labelFont: string = "Arial") => {
-  const canvas = document.createElement("canvas");
-  let fontSize = size * 0.6;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-
-  ctx.font = `${fontSize}px ${labelFont}`;
-  const labelMetrics = ctx.measureText(label);
-  const textWidth = labelMetrics.width + 20;
-  let emojiY = size * 0.9;
-
-  let textHeight = size * 0.92;
-
-  ctx.font = `${size}px "Noto Color Emoji"`;
-  const emojiMetrics = ctx.measureText(emojiTxt);
-  const emojiWidth = emojiMetrics.width;
-
-  canvas.height = textHeight + size + 20;
-  canvas.width = Math.max(emojiWidth, textWidth);
-
-  ctx.font = `${size}px "Noto Color Emoji"`;
-  ctx.fillText(emojiTxt, textWidth / 2 - emojiWidth / 2 < 0 ? 0 : textWidth / 2 - emojiWidth / 2, emojiY);
-  ctx.font = `${fontSize}px ${labelFont}`;
-  ctx.strokeStyle = "white"; // Outline color
-  ctx.lineWidth = 8; // Outline width
-  ctx.lineJoin = "round";
-  ctx.strokeText(label, 10, size + size * 0.72);
-  ctx.fillText(label, 10, size + size * 0.72);
-
-  return canvas.toDataURL();
-};
 
 export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, onUpdateMarker }: AddMarkerModalProps) {
   // Use initialMarker to determine edit mode
   const isEditMode = Boolean(initialMarker);
 
-  const [searchQuery, setSearchQuery] = useState(initialMarker?.location || "")
-  const [selectedEmoji, setSelectedEmoji] = useState(initialMarker?.emoji || "❤️")
-  const [markerLabel, setMarkerLabel] = useState(initialMarker?.label || "")
-  const [markerPosition, setMarkerPosition] = useState<{ x: number; y: number }>(initialMarker?.position || { x: 55.14, y: 25.069 })
-  const [markerSize, setMarkerSize] = useState<"small" | "medium" | "large">(initialMarker?.size || "medium")
+  const [searchQuery, setSearchQuery] = useState(initialMarker?.locationName || "")
+  const [selectedEmoji, setSelectedEmoji] = useState(initialMarker?.markerEmoji || "❤️")
+  const [markerLabel, setMarkerLabel] = useState(initialMarker?.markerLabel || "")
+  const [markerPosition, setMarkerPosition] = useState<[number, number]>(initialMarker?.markerCoordinates || [55.14, 25.069])
+  const [markerSize, setMarkerSize] = useState<"L" | "M" | "S">(initialMarker?.markerSize || "M")
   
   // Location search related states
   const [isSearchingLocation, setIsSearchingLocation] = useState(false)
@@ -87,17 +46,23 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
   const suggestionsRef = useRef<HTMLDivElement>(null)
   const searchTimeoutRef = useRef<number | null>(null)
   
+  // Determine initial map center based on edit mode marker
+  const initialCenterValue: [number, number] = initialMarker?.markerLocation
+    ? [initialMarker.markerLocation[0], initialMarker.markerLocation[1]]
+    : [55.14, 25.069];
   // Use refs to track map state without causing rerenders
-  const mapCenterRef = useRef<[number, number]>([55.14, 25.069])
+  const mapCenterRef = useRef<[number, number]>(initialCenterValue)
   const zoomRef = useRef(12)
   // State is only used for the initial render or when we need to force an update
-  const [mapCenter, setMapCenter] = useState<[number, number]>([55.14, 25.069])
+  const [mapCenter, setMapCenter] = useState<[number, number]>(initialCenterValue)
   const [zoom, setZoom] = useState(12)
   // Track if we need to update the map state
   const shouldUpdateMapRef = useRef(false)
 
   const mapRef = useRef<HTMLDivElement>(null)
 
+  const isAppleDevice = useMemo(() => typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent), []);
+  const emojiPickerStyle = isAppleDevice ? EmojiStyle.APPLE : EmojiStyle.GOOGLE;
 
   const handleEmojiClick = (emojiData: any, event: MouseEvent) => {
     setSelectedEmoji(emojiData.emoji);
@@ -153,72 +118,66 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
     setZoom(zoomRef.current); // Force update now
   }, []);
 
-  // Define marker sizes
-  const sizeMap = {
-    small: 20,
-    medium: 22,
-    large: 24
-  };
-
   // Memoize marker data to prevent unnecessary rerenders
-  const markerData = useMemo(() => {
-    const markerImage = generateMarkerImg(
-      selectedEmoji, 
-      markerLabel || "",
-      sizeMap[markerSize]
-    );
-    
+  const markerData = useMemo(() => {    
     return [{
-      id: "marker-1",
-      coordinates: [markerPosition.x, markerPosition.y] as [number, number],
-      title: markerLabel,
-      description: searchQuery,
-      customMarker: markerImage ? {
-        element: document.createElement("img"),
-        options: {
-          element: (() => {
-            const img = document.createElement("img");
-            img.src = markerImage;
-            img.className = "marker";
-            img.height = sizeMap[markerSize];
-            return img;
-          })()
-        }
-      } : undefined,
-      isDragging: true
+      markerId: initialMarker?.markerId || "",
+      markerSize: markerSize,
+      markerLabel: markerLabel,
+      markerCoordinates: markerPosition,
+      markerEmoji: selectedEmoji,
+      markerLocation: markerPosition,
     }];
-  }, [markerPosition, selectedEmoji, markerLabel, searchQuery, markerSize]);
+  }, [markerPosition, selectedEmoji, markerLabel, searchQuery, markerSize, emojiPickerStyle]);
 
   // Memoize callback functions for the MapboxMap component
   const handleMapClick = useCallback((coordinates: [number, number]) => {
     // Update both the marker position and map center
-    setMarkerPosition({ x: coordinates[0], y: coordinates[1] });
+    setMarkerPosition(coordinates);
     mapCenterRef.current = coordinates;
     setMapCenter(coordinates);
   }, []);
 
-  const handleMapMoveEnd = useCallback((coordinates: [number, number]) => {
-    // Update ref without causing re-render
-    mapCenterRef.current = coordinates;
-    // Update marker position to match the new center
-    setMarkerPosition({ x: coordinates[0], y: coordinates[1] });
+  const handleMove = useCallback((coordinates: [number, number]) => {
+    setMarkerPosition(coordinates);
   }, []);
 
-  // Confirm adding a marker with label
-  const handleAddMarker = useCallback(() => {
+  // Mapping of marker sizes to pixel values for center overlay
+  const sizePxMap: Record<"S"|"M"|"L", number> = { S: 20, M: 22, L: 24 };
+  // Generate center overlay marker image
+  const centerMarkerImg = useMemo(
+    () => generateMarkerImg(selectedEmoji, markerLabel, sizePxMap[markerSize]),
+    [selectedEmoji, markerLabel, markerSize]
+  );
+
+  // Confirm adding a marker with label, using reverse geocoding if no search query
+  const handleAddMarker = useCallback(async () => {
     if (!markerPosition) return;
-    const markerImage = generateMarkerImg(
-      selectedEmoji,
-      markerLabel || "New Marker",
-      sizeMap[markerSize]
-    );
-    const markerDataObj: MarkerData = {
-      emoji: selectedEmoji,
-      label: markerLabel,
-      location: searchQuery || "Custom Location",
-      position: markerPosition,
-      markerImage: markerImage || undefined,
-      size: markerSize
+    let locationName = searchQuery;
+    if (!locationName) {
+      try {
+        const response = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${markerPosition[0]},${markerPosition[1]}.json?access_token=${mapboxgl.accessToken}&limit=1`
+        );
+        const data = await response.json();
+        if (data.features && data.features.length > 0) {
+          locationName = data.features[0].place_name;
+        } else {
+          locationName = "Unknown Location";
+        }
+      } catch (error) {
+        console.error("Reverse geocoding error:", error);
+        locationName = "Unknown Location";
+      }
+    }
+    const markerDataObj: Marker = {
+      markerId: initialMarker?.markerId || "",
+      markerEmoji: selectedEmoji,
+      markerLabel: markerLabel,
+      markerLocation: [markerPosition[0], markerPosition[1]],
+      markerCoordinates: markerPosition,
+      markerSize: markerSize,
+      locationName: locationName
     };
     if (isEditMode && onUpdateMarker) {
       onUpdateMarker(markerDataObj);
@@ -226,7 +185,7 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
       onAddMarker(markerDataObj);
     }
     onClose();
-  }, [markerPosition, selectedEmoji, markerLabel, searchQuery, markerSize, onAddMarker, onUpdateMarker, onClose, isEditMode]);
+  }, [markerPosition, searchQuery, selectedEmoji, markerLabel, markerSize, onAddMarker, onUpdateMarker, onClose, isEditMode, emojiPickerStyle]);
 
   // Handle suggestion selection
   const handleSelectLocation = useCallback((suggestion: { place_name: string; center: [number, number] }) => {
@@ -234,12 +193,14 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
     mapCenterRef.current = suggestion.center;
     shouldUpdateMapRef.current = true;
     setMapCenter(suggestion.center);
+    // Update marker position to the selected location
+    setMarkerPosition(suggestion.center);
     setShowSuggestions(false);
   }, []);
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-hidden">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl h-[80vh] flex flex-col">
+      <div className="bg-white rounded-lg shadow-xl w-full md:max-w-5xl h-full md:h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-xl font-bold text-[#563635]">Add a Marker</h2>
@@ -250,9 +211,9 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
         </div>
 
         {/* Main content */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
           {/* Left sidebar */}
-          <div className="w-80 border-r bg-[#fcf8ed] flex flex-col h-full relative">
+          <div className="w-full md:w-80 h-1/2 md:h-full border-b md:border-r bg-[#fcf8ed] flex flex-col relative">
             {/* Scrollable content with bottom padding for button */}
             <div className="p-4 flex-1 overflow-auto pb-24">
               <div className="space-y-4">
@@ -266,11 +227,10 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
                         type="text"
                         placeholder="Search for a place..."
                         className="pl-8 border-[#563635]/20 focus-visible:ring-[#b7384e]"
-                        value={searchQuery}
+                        value={typeof searchQuery === 'string' ? searchQuery : ''}
                         onChange={(e) => {
                           const query = e.target.value;
                           setSearchQuery(query);
-                          
                           // Clear any existing timeout
                           if (searchTimeoutRef.current) {
                             clearTimeout(searchTimeoutRef.current);
@@ -356,6 +316,7 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
                     previewConfig={{ showPreview: false }}
                     searchPlaceholder="Search"
                     className="rounded-md border border-[#563635]/20"
+                    emojiStyle={emojiPickerStyle}
                   />
                 </div>
 
@@ -364,14 +325,14 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
                   <h3 className="text-sm font-medium text-[#563635]">Step 3: Choose Marker Size</h3>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { size: "small", label: "Small" },
-                      { size: "medium", label: "Medium" },
-                      { size: "large", label: "Large" }
+                      { size: "S", label: "Small" },
+                      { size: "M", label: "Medium" },
+                      { size: "L", label: "Large" }
                     ].map(({ size, label }) => (
                       <button
                         key={size}
                         type="button"
-                        onClick={() => setMarkerSize(size as "small" | "medium" | "large")}
+                        onClick={() => setMarkerSize(size as "S" | "M" | "L")}
                         className={`p-2 rounded-md border text-sm ${
                           markerSize === size
                             ? "bg-[#b7384e]/10 border-[#b7384e] ring-1 ring-[#b7384e]"
@@ -410,7 +371,7 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
               </div>
             </div>
             {/* Fixed Add Marker button at bottom of sidebar */}
-            <div className="absolute bottom-0 left-0 w-full border-t p-4 bg-white">
+            <div className="absolute bottom-0 left-0 w-full border-t p-4 bg-white z-10">
               <Button
                 onClick={handleAddMarker}
                 disabled={!markerPosition}
@@ -422,16 +383,24 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
           </div>
 
           {/* Map area */}
-          <div className="flex-1 relative overflow-hidden" ref={mapRef}>
+          <div className="w-full h-1/2 md:flex-1 md:h-full relative overflow-hidden" ref={mapRef}>
             {/* Map */}
             <div className="absolute inset-0 cursor-grab active:cursor-grabbing">
               <MemoizedMapboxMap
-                markers={markerData}
                 initialZoom={zoom}
                 initialCenter={mapCenter}
                 onClick={handleMapClick}
-                onMoveEnd={handleMapMoveEnd}
+                onMove={handleMove}
               />
+              {/* Static center marker overlay for smooth panning */}
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <img
+                  src={centerMarkerImg || ""}
+                  alt="Center marker"
+                  className="marker"
+                  style={{ height: sizePxMap[markerSize] * 3 }}
+                />
+              </div>
             </div>
           </div>
         </div>

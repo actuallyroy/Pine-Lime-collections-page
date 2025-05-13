@@ -25,9 +25,9 @@ export default function JourneyMapPage() {
   const [isSticky, setIsSticky] = useState(false)
   const [isAddMarkerModalOpen, setIsAddMarkerModalOpen] = useState(false)
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
-  const [markers, setMarkers] = useState<any[]>([])
+  const [markers, setMarkers] = useState<Marker[]>([])
   const [editingMarkerIndex, setEditingMarkerIndex] = useState<number | null>(null)
-  const [editingMarkerData, setEditingMarkerData] = useState<any>(null)
+  const [editingMarkerData, setEditingMarkerData] = useState<Marker | undefined>(undefined)
   const [mapTitle, setMapTitle] = useState("Our Journey")
   const [mapSettings, setMapSettings] = useState({ style: "vintage", routeType: "none", mapType: "default" })
   const [hasPreviewedMap, setHasPreviewedMap] = useState(false)
@@ -62,7 +62,7 @@ export default function JourneyMapPage() {
   const handleCloseAddMarkerModal = () => {
     setIsAddMarkerModalOpen(false)
     setEditingMarkerIndex(null)
-    setEditingMarkerData(null)
+    setEditingMarkerData(undefined)
   }
 
   // Add a marker
@@ -95,7 +95,7 @@ export default function JourneyMapPage() {
     updated[editingMarkerIndex] = updatedMarker
     setMarkers(updated)
     setEditingMarkerIndex(null)
-    setEditingMarkerData(null)
+    setEditingMarkerData(undefined)
   }
 
   // Open the preview modal
@@ -205,10 +205,10 @@ export default function JourneyMapPage() {
                               }}
                             >
                               <div className="relative">
-                                <div className="text-3xl">{marker.emoji}</div>
-                                {marker.label && (
+                                <div className="text-3xl">{marker.markerEmoji}</div>
+                                {marker.markerLabel && (
                                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 bg-white px-2 py-1 rounded text-xs whitespace-nowrap mt-1 shadow-sm">
-                                    {marker.label}
+                                    {marker.markerLabel}
                                   </div>
                                 )}
                               </div>
@@ -282,7 +282,7 @@ export default function JourneyMapPage() {
                                       height="100"
                                     >
                                       <image
-                                        href={`/placeholder.svg?height=100&width=100&text=${marker.label}`}
+                                        href={`/placeholder.svg?height=100&width=100&text=${marker.markerLabel}`}
                                         x="0"
                                         y="0"
                                         width="100"
@@ -300,7 +300,7 @@ export default function JourneyMapPage() {
                                     dominantBaseline="middle"
                                     fontSize="8"
                                   >
-                                    {marker.emoji}
+                                    {marker.markerEmoji}
                                   </text>
                                 </g>
                               )
@@ -316,15 +316,15 @@ export default function JourneyMapPage() {
                             key={index}
                             className="absolute transform -translate-x-1/2 -translate-y-1/2 z-10"
                             style={{
-                              left: `${marker.position.x}%`,
-                              top: `${marker.position.y}%`,
+                              left: `${marker.markerLocation[0]}%`,
+                              top: `${marker.markerLocation[1]}%`,
                             }}
                           >
                             <div className="relative">
-                              <div className="text-3xl">{marker.emoji}</div>
-                              {marker.label && (
+                              <div className="text-3xl">{marker.markerEmoji}</div>
+                              {marker.markerLabel && (
                                 <div className="absolute top-full left-1/2 transform -translate-x-1/2 bg-white px-2 py-1 rounded text-xs whitespace-nowrap mt-1 shadow-sm">
-                                  {marker.label}
+                                  {marker.markerLabel}
                                 </div>
                               )}
                             </div>
@@ -337,10 +337,10 @@ export default function JourneyMapPage() {
                             {markers.slice(0, -1).map((marker, index) => (
                               <line
                                 key={index}
-                                x1={`${marker.position.x}%`}
-                                y1={`${marker.position.y}%`}
-                                x2={`${markers[index + 1].position.x}%`}
-                                y2={`${markers[index + 1].position.y}%`}
+                                x1={`${marker.markerLocation[0]}%`}
+                                y1={`${marker.markerLocation[1]}%`}
+                                x2={`${markers[index + 1].markerLocation[0]}%`}
+                                y2={`${markers[index + 1].markerLocation[1]}%`}
                                 stroke="#b7384e"
                                 strokeWidth="2"
                                 strokeDasharray={mapSettings.routeType === "air" ? "5,5" : "none"}
@@ -458,10 +458,10 @@ export default function JourneyMapPage() {
                           key={index}
                           className="flex items-center gap-2 p-2 bg-white rounded-md border border-[#563635]/10 hover:border-[#563635]/30 transition-colors"
                         >
-                          <div className="text-xl">{marker.emoji}</div>
+                          <div className="text-xl">{marker.markerEmoji}</div>
                           <div className="flex-1">
-                            <div className="text-sm font-medium text-[#563635] truncate">{marker.label}</div>
-                            <div className="text-xs text-[#563635]/70 truncate">{marker.location}</div>
+                            <div className="text-sm font-medium text-[#563635] truncate">{marker.markerLabel}</div>
+                            <div className="text-xs text-[#563635]/70 truncate">{marker.locationName}</div>
                           </div>
                           <Button
                             variant="ghost"

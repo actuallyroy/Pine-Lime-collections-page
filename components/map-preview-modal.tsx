@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { X, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -9,23 +9,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import Image from "next/image"
 import { projectCoordinatesToPixels } from "@/lib/map-utils"
+import { fetchMapStyles, MapStyle } from "@/lib/map-styles"
+import MapboxMap from "./mapbox-map"
+import { setMapInstance, getMapInstance } from "@/utils/mapUtils"
+import { HEART_LAYOUT_DATA } from "@/lib/heart-layouts"
+import { generateMarkerImg } from "@/lib/map-utils"
 
 interface MapPreviewModalProps {
   onClose: () => void
-  onSave: (settings: { style: string; routeType: string; mapType: string }) => void
-  markers: Array<{
-    emoji: string;
-    label: string;
-    location: string;
-    position: { x: number; y: number };
-    coordinates?: [number, number]; // Longitude, latitude
-  }>
+  onSave: (settings: { style: string; routeType: string; mapType: string; mapCenter?: [number, number]; mapZoom?: number }) => void
+  markers: Array<Marker>
   title: string
-  initialSettings?: { style: string; routeType: string; mapType: string }
+  initialSettings?: { style: string; routeType: string; mapType: string; mapCenter?: [number, number]; mapZoom?: number }
 }
 
 // Map styles keyed to Mapbox style IDs
-const MAPBOX_STYLES = {
+const MAPBOX_STYLES: Record<string, string> = {
   vintage: "mapbox://styles/mapbox/outdoors-v12",
   retro: "mapbox://styles/mapbox/light-v11",
   minimal: "mapbox://styles/mapbox/streets-v12",
@@ -34,12 +33,19 @@ const MAPBOX_STYLES = {
   dark: "mapbox://styles/mapbox/dark-v11",
 };
 
+// Define marker sizes
+const sizeMap = {
+  S: 20,
+  M: 22,
+  L: 24
+};
+
 export default function MapPreviewModal({
   onClose,
   onSave,
   markers,
   title,
-  initialSettings = { style: "vintage", routeType: "none", mapType: "default" },
+  initialSettings = { style: "vintage", routeType: "none", mapType: "fit" },
 }: MapPreviewModalProps) {
   const [activeTab, setActiveTab] = useState("style")
   const [mapStyle, setMapStyle] = useState(initialSettings.style)
@@ -47,21 +53,62 @@ export default function MapPreviewModal({
   const [mapType, setMapType] = useState(initialSettings.mapType)
   const [imageWidth, setImageWidth] = useState(800)
   const [imageHeight, setImageHeight] = useState(600)
-  const [mapCenter, setMapCenter] = useState<[number, number]>([0, 0])
-  const [mapZoom, setMapZoom] = useState(1)
+  const [mapCenter, setMapCenter] = useState<[number, number]>(initialSettings.mapCenter || [0, 0])
+  const [mapZoom, setMapZoom] = useState(initialSettings.mapZoom || 1)
+  const [customStyles, setCustomStyles] = useState<MapStyle[]>([])
+  const [isLoadingStyles, setIsLoadingStyles] = useState(false)
+  const [isInitialFit, setIsInitialFit] = useState(!initialSettings.mapCenter)
+  const tempMapState = useRef({ center: mapCenter, zoom: mapZoom })
+  const mapRef = useRef<mapboxgl.Map | null>(null)
+  const lastCustomState = useRef<{ center: [number, number]; zoom: number } | null>(null)
+  const [splitImageUrls, setSplitImageUrls] = useState<string[]>([])
+  // Responsive scaling for split map
+  const parentRef = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(1)
+  useEffect(() => {
+    function handleResize() {
+      if (parentRef.current) {
+        const parentWidth = parentRef.current.offsetWidth
+        const parentHeight = parentRef.current.offsetHeight
+        // 2400 is the fixed size of .split-map-cont
+        const scaleW = parentWidth / 2400
+        const scaleH = parentHeight / 2400
+        setScale(Math.min(scaleW, scaleH))
+      }
+    }
+    handleResize()
+    // Use ResizeObserver for parent container
+    let observer: ResizeObserver | null = null
+    if (parentRef.current && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(handleResize)
+      observer.observe(parentRef.current)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      if (observer && parentRef.current) observer.disconnect()
+    }
+  }, [])
+
+  // Update map instance reference when it changes
+  useEffect(() => {
+    if (mapRef.current) {
+      setMapInstance(mapRef.current);
+    }
+  }, [mapRef.current]);
 
   // Log markers for debugging
   useEffect(() => {
     console.log("Map preview markers:", markers);
-    console.log("Markers with coordinates:", markers.filter(m => m.coordinates));
+    console.log("Markers with coordinates:", markers.filter(m => m.markerCoordinates));
   }, [markers]);
-
+  
   // Calculate the map center and zoom based on markers
   useEffect(() => {
-    if (markers.length === 0) return;
+    if (markers.length === 0 || !isInitialFit) return;
     
     // If we have markers with coordinates, use them to calculate map center and zoom
-    const markersWithCoords = markers.filter(marker => marker.coordinates);
+    const markersWithCoords = markers.filter(marker => marker.markerCoordinates);
     
     if (markersWithCoords.length === 0) return;
     
@@ -72,8 +119,8 @@ export default function MapPreviewModal({
     let maxLat = -Infinity;
     
     markersWithCoords.forEach(marker => {
-      if (!marker.coordinates) return;
-      const [lng, lat] = marker.coordinates;
+      if (!marker.markerCoordinates) return;
+      const [lng, lat] = marker.markerCoordinates;
       minLng = Math.min(minLng, lng);
       maxLng = Math.max(maxLng, lng);
       minLat = Math.min(minLat, lat);
@@ -92,22 +139,26 @@ export default function MapPreviewModal({
     const centerLat = (minLat + maxLat) / 2;
     setMapCenter([centerLng, centerLat]);
     
-    // Calculate zoom (simplified)
-    const lngDiff = maxLng - minLng;
-    const latDiff = maxLat - minLat;
-    const maxDiff = Math.max(lngDiff, latDiff);
+    // Use fitBounds to set the zoom level
+    const mapInstance = getMapInstance();
+    if (mapInstance) {
+      mapInstance.fitBounds(
+        [
+          [minLng, minLat],
+          [maxLng, maxLat]
+        ],
+        {
+          padding: 50, // Add some padding around the bounds
+          maxZoom: 15, // Limit maximum zoom level
+          duration: 0 // No animation for initial fit
+        }
+      );
+      // Update the zoom level in our state
+      setMapZoom(mapInstance.getZoom());
+    }
     
-    // Use a simple formula to estimate zoom level
-    // Adjust these values based on testing
-    let zoom = 12;
-    if (maxDiff > 10) zoom = 2;
-    else if (maxDiff > 5) zoom = 4;
-    else if (maxDiff > 2) zoom = 6;
-    else if (maxDiff > 1) zoom = 8;
-    else if (maxDiff > 0.5) zoom = 10;
-    
-    setMapZoom(zoom);
-  }, [markers]);
+    setIsInitialFit(false);
+  }, [markers, isInitialFit]);
 
   // Map styles with preview images
   const mapStyles = [
@@ -122,10 +173,10 @@ export default function MapPreviewModal({
   // Map types
   const mapTypes = [
     {
-      id: "default",
-      name: "Default",
+      id: "custom",
+      name: "Custom",
       description: "Standard map with all markers shown in their exact positions",
-      image: "/placeholder.svg?height=120&width=120&text=Default",
+      image: "/placeholder.svg?height=120&width=120&text=Custom",
     },
     {
       id: "fit",
@@ -167,17 +218,17 @@ export default function MapPreviewModal({
     const path = styleId + '/static/';
     
     // If no markers with coordinates, use default location (New York)
-    const hasCoordinates = markers.some(marker => marker.coordinates);
+    const hasCoordinates = markers.some(marker => marker.markerCoordinates);
     console.log("Has markers with coordinates:", hasCoordinates);
     
     let longitude, latitude;
     
     if (hasCoordinates) {
       // Find a marker with coordinates to use as center
-      const centerMarker = markers.find(marker => marker.coordinates);
+      const centerMarker = markers.find(marker => marker.markerCoordinates);
       // Use calculated center and zoom if available, otherwise use first marker
-      longitude = centerMarker ? centerMarker.coordinates![0] : mapCenter[0];
-      latitude = centerMarker ? centerMarker.coordinates![1] : mapCenter[1];
+      longitude = centerMarker ? centerMarker.markerCoordinates![0] : mapCenter[0];
+      latitude = centerMarker ? centerMarker.markerCoordinates![1] : mapCenter[1];
     } else {
       // Default to Dubai's coordinates as a fallback
       longitude = 55.2708;
@@ -208,8 +259,68 @@ export default function MapPreviewModal({
   };
 
   const handleSave = () => {
-    onSave({ style: mapStyle, routeType, mapType })
+    // Get the final map state from the map instance
+    const mapInstance = getMapInstance();
+    if (mapInstance) {
+      const center = mapInstance.getCenter();
+      const zoom = mapInstance.getZoom();
+      onSave({ 
+        style: mapStyle, 
+        routeType, 
+        mapType,
+        mapCenter: [center.lng, center.lat],
+        mapZoom: zoom
+      })
+    } else {
+      onSave({ 
+        style: mapStyle, 
+        routeType, 
+        mapType,
+        mapCenter: tempMapState.current.center,
+        mapZoom: tempMapState.current.zoom
+      })
+    }
   }
+
+  // Store map state when switching types
+  const handleMapTypeChange = (newType: string) => {
+    // Store current state before switching
+    const mapInstance = getMapInstance();
+    if (mapInstance) {
+      const center = mapInstance.getCenter();
+      const zoom = mapInstance.getZoom();
+      if (mapType === 'custom') {
+        lastCustomState.current = {
+          center: [center.lng, center.lat],
+          zoom: zoom
+        };
+      }
+    }
+    setMapType(newType);
+  };
+
+  // Helper to generate a static Mapbox image URL centered on a single marker
+  const getSingleMarkerUrl = (marker: Marker, mapStyle: string) => {
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    const styleId = mapStyle.split('/').pop();
+    const [lng, lat] = marker.markerCoordinates || marker.markerLocation;
+    const coords = `${lng},${lat},12,0`;
+    // Generate marker image as dataURL
+    const dataUrl = generateMarkerImg(marker.markerEmoji, marker.markerLabel, sizeMap[marker.markerSize]) as string;
+    // Use the API endpoint to convert dataURL to PNG
+    const markerApiUrl = encodeURIComponent(`${window.location.origin}/api/marker?dataurl=${encodeURIComponent(dataUrl)}`);
+    // Return Mapbox static map URL with custom marker overlay
+    return `https://api.mapbox.com/styles/v1/pinenlime/${styleId}/static/url-${markerApiUrl}(${lng},${lat})/${coords}/500x500@2x?access_token=${token}&logo=false&attribution=false`;
+  };
+
+  // Pre-generate one image per marker when entering split mode
+  useEffect(() => {
+    if (mapType !== 'split') return
+    const layout = HEART_LAYOUT_DATA.find(item => item.id === markers.length)
+    if (!layout) return
+    const urls = markers.map(marker => getSingleMarkerUrl(marker, mapStyle))
+    setSplitImageUrls(urls)
+  }, [mapType, markers, mapStyle])
 
   // Render map based on selected map type
   const renderMap = () => {
@@ -217,12 +328,24 @@ export default function MapPreviewModal({
       case "fit":
         return (
           <div className="w-full h-full relative">
-            <Image 
-              src={getMapboxStaticImageUrl} 
-              alt="Map Preview" 
-              fill 
-              className="object-cover"
-              unoptimized
+            <MapboxMap
+              markers={markers}
+              intrinsicHeight="8in"
+              intrinsicWidth="8in"
+              showFullScreen={false}
+              showNavigation={false}
+              fitToMarkers={true}
+              style={MAPBOX_STYLES[mapStyle] || mapStyle}
+              onMoveEnd={(coordinates: [number, number]) => {
+                // Store the state in the ref instead of updating state
+                const mapInstance = getMapInstance();
+                if (mapInstance) {
+                  tempMapState.current = {
+                    center: coordinates,
+                    zoom: mapInstance.getZoom()
+                  };
+                }
+              }}
             />
 
             {/* Map title */}
@@ -230,58 +353,33 @@ export default function MapPreviewModal({
               <div className="text-center text-lg font-medium text-[#563635]">{title}</div>
             </div>
 
-            {/* Markers with adjusted positions to avoid overlap */}
-            {markers.map((marker, index) => {
-              // Calculate adjusted positions to avoid overlap
-              // This is a simplified example - in a real implementation, you'd use a more sophisticated algorithm
-              const totalMarkers = markers.length;
-              const angleStep = (2 * Math.PI) / totalMarkers;
-              const radius = 30; // % from center
-              const centerX = 50;
-              const centerY = 50;
-              const angle = index * angleStep;
-              const x = centerX + radius * Math.cos(angle);
-              const y = centerY + radius * Math.sin(angle);
-
-              return (
-                <div
-                  key={index}
-                  className="absolute transform -translate-x-1/2 -translate-y-1/2 z-10"
-                  style={{
-                    left: `${x}%`,
-                    top: `${y}%`,
-                  }}
-                >
-                  <div className="relative">
-                    <div className="text-3xl">{marker.emoji}</div>
-                    {marker.label && (
-                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 bg-white px-2 py-1 rounded text-xs whitespace-nowrap mt-1 shadow-sm">
-                        {marker.label}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-
             {/* Routes between markers */}
             {routeType !== "none" && markers.length > 1 && (
               <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                {markers.map((_, index) => {
-                  if (index === markers.length - 1) return null
-
-                  // Calculate positions for the adjusted markers
-                  const angleStep = (2 * Math.PI) / markers.length
-                  const radius = 30 // % from center
-                  const centerX = 50
-                  const centerY = 50
-                  const angle1 = index * angleStep
-                  const angle2 = ((index + 1) % markers.length) * angleStep
-                  const x1 = centerX + radius * Math.cos(angle1)
-                  const y1 = centerY + radius * Math.sin(angle1)
-                  const x2 = centerX + radius * Math.cos(angle2)
-                  const y2 = centerY + radius * Math.sin(angle2)
-
+                {markers.slice(0, -1).map((marker, index) => {
+                  const nextMarker = markers[index + 1];
+                  
+                  // Get position either from projected coordinates or from the position property
+                  let x1, y1, x2, y2;
+                  
+                  if (marker.markerCoordinates) {
+                    const pixelCoords = getMarkerPixelCoordinates(marker.markerCoordinates);
+                    x1 = (pixelCoords[0] / imageWidth) * 100;
+                    y1 = (pixelCoords[1] / imageHeight) * 100;
+                  } else {
+                    x1 = marker.markerLocation[0];
+                    y1 = marker.markerLocation[1];
+                  }
+                  
+                  if (nextMarker.markerCoordinates) {
+                    const pixelCoords = getMarkerPixelCoordinates(nextMarker.markerCoordinates);
+                    x2 = (pixelCoords[0] / imageWidth) * 100;
+                    y2 = (pixelCoords[1] / imageHeight) * 100;
+                  } else {
+                    x2 = nextMarker.markerLocation[0];
+                    y2 = nextMarker.markerLocation[1];
+                  }
+                  
                   return (
                     <line
                       key={index}
@@ -293,117 +391,102 @@ export default function MapPreviewModal({
                       strokeWidth="2"
                       strokeDasharray={routeType === "air" ? "5,5" : "none"}
                     />
-                  )
+                  );
                 })}
               </svg>
             )}
           </div>
         )
 
-      case "split":
-        return (
-          <div className="w-full h-full relative">
-            {/* Heart-shaped split map */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <svg viewBox="0 0 100 100" className="w-full h-full">
-                {/* Create heart shape with sections */}
-                {markers.map((marker, index) => {
-                  // Calculate section of the heart for each marker
-                  const totalMarkers = markers.length
-                  const sectionPath = getSplitHeartSection(index, totalMarkers)
-
-                  return (
-                    <g key={index}>
-                      <path d={sectionPath} fill={`url(#map-section-${index})`} stroke="#fff" strokeWidth="0.5" />
-                      <defs>
-                        <pattern id={`map-section-${index}`} patternUnits="userSpaceOnUse" width="100" height="100">
-                          <image
-                            href={getMapboxStaticImageUrl}
-                            x="0"
-                            y="0"
-                            width="100"
-                            height="100"
-                            preserveAspectRatio="xMidYMid slice"
-                          />
-                        </pattern>
-                      </defs>
-
-                      {/* Marker label */}
-                      <text
-                        x={getHeartSectionCenter(index, totalMarkers).x}
-                        y={getHeartSectionCenter(index, totalMarkers).y}
-                        textAnchor="middle"
-                        fill="white"
-                        fontSize="4"
-                        fontWeight="bold"
-                        stroke="#000"
-                        strokeWidth="0.5"
-                      >
-                        {marker.label}
-                      </text>
-                    </g>
-                  )
-                })}
-              </svg>
+      case "split": {
+        const layout = HEART_LAYOUT_DATA.find(item => item.id === markers.length)
+        if (!layout || !layout.markers || splitImageUrls.length !== markers.length) {
+          return (
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="text-center text-[#563635]">
+                {!layout ? "Split heart layout not available for this number of markers" : "Loading split map..."}
+              </div>
             </div>
-
-            {/* Map title */}
-            <div className="absolute left-1/2 bottom-8 transform -translate-x-1/2 bg-white/90 px-4 py-2 rounded shadow-md">
-              <div className="text-center text-lg font-medium text-[#563635]">{title}</div>
+          )
+        }
+        return (
+          <div ref={parentRef} className="w-full h-full flex items-center justify-center overflow-hidden relative">
+            <div
+              className="split-map-cont"
+              style={{
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+              }}
+            >
+              <div className="split-map-parts-cont">
+                {layout.markers.map((m, idx) => (
+                  <div
+                    key={idx}
+                    className="split-map-marker"
+                    style={{
+                      clipPath: `path('${m.clipPath}')`,
+                      width: `${m.width}%`,
+                      height: `${m.height}%`,
+                      top: `${m.top}px`,
+                      left: `${m.left}px`,
+                    }}
+                  >
+                    <img
+                      src={splitImageUrls[idx]}
+                      style={{
+                        top: `${m.img.top}%`,
+                        left: `${m.img.left}%`,
+                        transform: 'translate(-50%, -50%)',
+                      }}
+                      alt=""
+                    />
+                  </div>
+                ))}
+                <img
+                  src={layout.img}
+                  className="split-map-img"
+                  alt=""
+                />
+              </div>
+              {title && (
+                <div className="split-map-title">{title}</div>
+              )}
             </div>
           </div>
         )
-
-      case "default":
+      }
+      case "custom":
       default:
         return (
           <div className="w-full h-full relative">
-            <Image 
-              src={getMapboxStaticImageUrl} 
-              alt="Map Preview" 
-              fill 
-              className="object-cover"
-              unoptimized
+            <MapboxMap
+              markers={markers}
+              intrinsicHeight="8in"
+              intrinsicWidth="8in"
+              showFullScreen={false}
+              showNavigation={true}
+              style={MAPBOX_STYLES[mapStyle] || mapStyle}
+              initialCenter={lastCustomState.current?.center || tempMapState.current.center}
+              initialZoom={lastCustomState.current?.zoom || tempMapState.current.zoom}
+              onMoveEnd={(coordinates: [number, number]) => {
+                // Store the state in the ref instead of updating state
+                const mapInstance = getMapInstance();
+                if (mapInstance) {
+                  tempMapState.current = {
+                    center: coordinates,
+                    zoom: mapInstance.getZoom()
+                  };
+                }
+              }}
             />
 
             {/* Map title */}
             <div className="absolute left-1/2 bottom-8 transform -translate-x-1/2 bg-white/90 px-4 py-2 rounded shadow-md">
               <div className="text-center text-lg font-medium text-[#563635]">{title}</div>
             </div>
-
-            {/* Markers */}
-            {markers.map((marker, index) => {
-              // If the marker has coordinates, project them to pixels
-              let left = `${marker.position.x}%`;
-              let top = `${marker.position.y}%`;
-              
-              if (marker.coordinates) {
-                const pixelCoords = getMarkerPixelCoordinates(marker.coordinates);
-                // Convert to percentage of container
-                left = `${(pixelCoords[0] / imageWidth) * 100}%`;
-                top = `${(pixelCoords[1] / imageHeight) * 100}%`;
-              }
-              
-              return (
-                <div
-                  key={index}
-                  className="absolute transform -translate-x-1/2 -translate-y-1/2 z-10"
-                  style={{
-                    left: left,
-                    top: top,
-                  }}
-                >
-                  <div className="relative">
-                    <div className="text-3xl">{marker.emoji}</div>
-                    {marker.label && (
-                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 bg-white px-2 py-1 rounded text-xs whitespace-nowrap mt-1 shadow-sm">
-                        {marker.label}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
 
             {/* Routes between markers */}
             {routeType !== "none" && markers.length > 1 && (
@@ -414,22 +497,22 @@ export default function MapPreviewModal({
                   // Get position either from projected coordinates or from the position property
                   let x1, y1, x2, y2;
                   
-                  if (marker.coordinates) {
-                    const pixelCoords = getMarkerPixelCoordinates(marker.coordinates);
+                  if (marker.markerCoordinates) {
+                    const pixelCoords = getMarkerPixelCoordinates(marker.markerCoordinates);
                     x1 = (pixelCoords[0] / imageWidth) * 100;
                     y1 = (pixelCoords[1] / imageHeight) * 100;
                   } else {
-                    x1 = marker.position.x;
-                    y1 = marker.position.y;
+                    x1 = marker.markerLocation[0];
+                    y1 = marker.markerLocation[1];
                   }
                   
-                  if (nextMarker.coordinates) {
-                    const pixelCoords = getMarkerPixelCoordinates(nextMarker.coordinates);
+                  if (nextMarker.markerCoordinates) {
+                    const pixelCoords = getMarkerPixelCoordinates(nextMarker.markerCoordinates);
                     x2 = (pixelCoords[0] / imageWidth) * 100;
                     y2 = (pixelCoords[1] / imageHeight) * 100;
                   } else {
-                    x2 = nextMarker.position.x;
-                    y2 = nextMarker.position.y;
+                    x2 = nextMarker.markerLocation[0];
+                    y2 = nextMarker.markerLocation[1];
                   }
                   
                   return (
@@ -473,6 +556,78 @@ export default function MapPreviewModal({
     }
   }
 
+  useEffect(() => {
+    const getCustomStyles = async () => {
+      setIsLoadingStyles(true)
+      try {
+        const styles = await fetchMapStyles()
+        setCustomStyles(styles)
+      } catch (error) {
+        console.error("Error fetching custom map styles:", error)
+      } finally {
+        setIsLoadingStyles(false)
+      }
+    }
+    getCustomStyles()
+  }, [])
+
+  // Combine custom and static styles into a uniform display list
+  const staticDisplayStyles = mapStyles.map(style => ({
+    styleId: style.id,
+    title: style.name,
+    image: style.image,
+  }))
+  const customDisplayStyles = customStyles.map(style => ({
+    styleId: style.styleId,
+    title: style.Title,
+    image: style.image,
+  }))
+  const displayStyles = customDisplayStyles.length > 0 ? customDisplayStyles : staticDisplayStyles
+
+  // Handle style change
+  const handleStyleChange = (newStyle: string) => {
+    // Store current map position before changing style
+    const mapInstance = getMapInstance();
+    if (mapInstance) {
+      const center = mapInstance.getCenter();
+      const zoom = mapInstance.getZoom();
+      tempMapState.current = {
+        center: [center.lng, center.lat],
+        zoom: zoom
+      };
+    }
+    setMapStyle(newStyle);
+  };
+
+  // Add effect to disable map interactions for 'fit' type
+  useEffect(() => {
+    if (mapType === 'fit') {
+      const mapInstance = getMapInstance();
+      if (mapInstance) {
+        // Disable all interactions
+        mapInstance.dragPan.disable();
+        mapInstance.scrollZoom.disable();
+        mapInstance.boxZoom.disable();
+        mapInstance.dragRotate.disable();
+        mapInstance.keyboard.disable();
+        mapInstance.doubleClickZoom.disable();
+        mapInstance.touchZoomRotate.disable();
+        mapInstance.touchPitch.disable();
+
+        // Handle single marker case
+        const markersWithCoords = markers.filter(marker => marker.markerCoordinates);
+        if (markersWithCoords.length === 1) {
+          const [lng, lat] = markersWithCoords[0].markerCoordinates!;
+          mapInstance.flyTo({
+            center: [lng, lat],
+            zoom: 12, // Reasonable zoom level for a single marker
+            duration: 0 // No animation
+          });
+        }
+      }
+    }
+  }, [mapType, markers]);
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-hidden">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl h-[90vh] flex flex-col">
@@ -488,115 +643,117 @@ export default function MapPreviewModal({
         {/* Main content */}
         <div className="flex flex-1 overflow-hidden">
           {/* Map preview */}
-          <div className="flex-1 p-6 flex items-center justify-center bg-[#fcf8ed]">
-            <div className="relative aspect-[3/4] w-full max-w-md mx-auto">{renderMap()}</div>
+          <div className="flex-1 flex items-center justify-center bg-[#fcf8ed]">
+            <div className="relative w-full h-full">{renderMap()}</div>
           </div>
 
           {/* Settings panel */}
-          <div className="w-80 border-l p-4 flex flex-col overflow-auto">
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="w-full">
-                <TabsTrigger value="style">Map Style</TabsTrigger>
-                <TabsTrigger value="layout">Layout</TabsTrigger>
-              </TabsList>
+          <div className="w-80 border-l flex flex-col">
+            <div className="p-4 flex-1 overflow-auto">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="style">Map Style</TabsTrigger>
+                  <TabsTrigger value="layout">Layout</TabsTrigger>
+                </TabsList>
 
-              <TabsContent value="style" className="mt-4 space-y-6">
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-[#563635]">Map Style</h3>
-                  <div className="grid grid-cols-3 gap-2">
-                    {mapStyles.map((style) => (
-                      <button
-                        key={style.id}
-                        type="button"
-                        onClick={() => setMapStyle(style.id)}
-                        className={`p-1 rounded-md border hover:border-[#b7384e] transition-colors ${
-                          mapStyle === style.id ? "border-[#b7384e] ring-1 ring-[#b7384e]" : "border-[#563635]/20"
-                        }`}
-                      >
-                        <div className="aspect-square relative rounded overflow-hidden">
-                          <img
-                            src={style.image || "/placeholder.svg"}
-                            alt={style.name}
-                            className="object-cover w-full h-full"
-                          />
-                        </div>
-                        <p className="text-xs text-center mt-1">{style.name}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-[#563635]">Route Type</h3>
-                  <RadioGroup value={routeType} onValueChange={setRouteType} className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="none" id="route-none" />
-                      <Label htmlFor="route-none">No Routes</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="road" id="route-road" />
-                      <Label htmlFor="route-road">Road Routes</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="air" id="route-air" />
-                      <Label htmlFor="route-air">Air Routes</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="layout" className="mt-4 space-y-6">
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-[#563635]">Map Layout</h3>
-                  <div className="space-y-3">
-                    {mapTypes.map((type) => (
-                      <div
-                        key={type.id}
-                        className={`p-3 border rounded-md cursor-pointer ${
-                          mapType === type.id
-                            ? "border-[#b7384e] bg-[#b7384e]/5"
-                            : "border-[#563635]/20 hover:border-[#563635]/40"
-                        }`}
-                        onClick={() => setMapType(type.id)}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="w-16 h-16 shrink-0 rounded overflow-hidden border border-[#563635]/10">
-                            <img
-                              src={type.image || "/placeholder.svg"}
-                              alt={type.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1">
-                              <h4 className="font-medium text-[#563635]">{type.name}</h4>
-                              {type.id === "split" && (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Info className="h-4 w-4 text-[#563635]/60" />
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p className="text-xs max-w-[200px]">
-                                        Best with 3-7 markers. Creates a beautiful heart-shaped collage of your journey.
-                                      </p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                            </div>
-                            <p className="text-xs text-[#563635]/70 mt-1">{type.description}</p>
-                          </div>
-                        </div>
+                <TabsContent value="style" className="mt-4 space-y-6">
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium text-[#563635]">Map Style</h3>
+                    {isLoadingStyles ? (
+                      <div className="flex items-center justify-center p-4 text-[#563635]">
+                        Loading map styles...
                       </div>
-                    ))}
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2">
+                        {displayStyles.map(style => (
+                          <button
+                            key={style.styleId}
+                            type="button"
+                            onClick={() => handleStyleChange(style.styleId)}
+                            className={`p-1 rounded-md border hover:border-[#b7384e] transition-colors ${
+                              mapStyle === style.styleId ? "border-[#b7384e] ring-1 ring-[#b7384e]" : "border-[#563635]/20"
+                            }`}
+                          >
+                            <div className="aspect-square relative rounded overflow-hidden">
+                              <img src={style.image} alt={style.title} className="object-cover w-full h-full" />
+                            </div>
+                            <p className="text-xs text-center mt-1">{style.title}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              </TabsContent>
 
-            </Tabs>
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium text-[#563635]">Route Type</h3>
+                    <RadioGroup value={routeType} onValueChange={setRouteType} className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="none" id="route-none" />
+                        <Label htmlFor="route-none">No Routes</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="road" id="route-road" />
+                        <Label htmlFor="route-road">Road Routes</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="air" id="route-air" />
+                        <Label htmlFor="route-air">Air Routes</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                </TabsContent>
 
-            <div className="mt-auto pt-4">
+                <TabsContent value="layout" className="mt-4 space-y-6">
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium text-[#563635]">Map Layout</h3>
+                    <div className="space-y-3">
+                      {mapTypes.map((type) => (
+                        <div
+                          key={type.id}
+                          className={`p-3 border rounded-md cursor-pointer ${
+                            mapType === type.id
+                              ? "border-[#b7384e] bg-[#b7384e]/5"
+                              : "border-[#563635]/20 hover:border-[#563635]/40"
+                          }`}
+                          onClick={() => handleMapTypeChange(type.id)}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="w-16 h-16 shrink-0 rounded overflow-hidden border border-[#563635]/10">
+                              <img
+                                src={type.image || "/placeholder.svg"}
+                                alt={type.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1">
+                                <h4 className="font-medium text-[#563635]">{type.name}</h4>
+                                {type.id === "split" && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Info className="h-4 w-4 text-[#563635]/60" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="text-xs max-w-[200px]">
+                                          Best with 3-7 markers. Creates a beautiful heart-shaped collage of your journey.
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                              </div>
+                              <p className="text-xs text-[#563635]/70 mt-1">{type.description}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+            <div className="p-4 border-t">
               <Button onClick={handleSave} className="w-full bg-[#b7384e] hover:bg-[#b7384e]/90 text-white">
                 Save Settings
               </Button>
