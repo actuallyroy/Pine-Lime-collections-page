@@ -601,6 +601,42 @@ function MapboxMapInner({
       }
     : { width: "100%", height: "100%" }
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const div = document.createElement("div");
+    div.style.position = "absolute";
+    div.style.top = "0";
+    div.style.left = "0";
+    div.style.width = "100%";
+    div.style.height = "100%";
+    document.body.appendChild(div);
+
+    const handleClick = (e: MouseEvent) => {
+      if (e.target === div) {
+        const rect = div.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        onClick?.([x, y]);
+      }
+    };
+
+    div.addEventListener("click", handleClick);
+
+    return () => {
+      div.removeEventListener("click", handleClick);
+      document.body.removeChild(div);
+    };
+  }, [onClick]);
+
+  // For image creation
+  const createImage = (src: string) => {
+    if (typeof window === 'undefined') return null;
+    const img = document.createElement("img");
+    img.src = src;
+    return img;
+  };
+
   return (
     <div ref={wrapperRef} className="relative w-full h-full overflow-hidden">
       <div

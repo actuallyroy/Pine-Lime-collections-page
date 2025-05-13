@@ -129,9 +129,11 @@ export default function JourneyMapPage() {
     if (!hasPreviewedMap && markers.length > 0) {
       setShowPreviewWarning(true);
       // Scroll to warning
-      setTimeout(() => {
-        document.getElementById("preview-warning")?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          document.getElementById("preview-warning")?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+      }
     } else {
       // Add to cart logic here
       console.log("Adding to cart:", { markers, mapTitle, mapData, frame, size });

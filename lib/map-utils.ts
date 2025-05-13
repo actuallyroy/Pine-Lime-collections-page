@@ -61,35 +61,29 @@ export function projectCoordinatesToPixels(
 }
 
 // Add marker image generation function
-export const generateMarkerImg = (emojiTxt: string, label: string, size: number = 20, labelFont: string = "Arial", emojiStyle: EmojiStyle = EmojiStyle.GOOGLE) => {
+export const generateMarkerImg = (emoji: string, label: string, size: number) => {
+  if (typeof window === 'undefined') return null;
+  
   const canvas = document.createElement("canvas");
-  let fontSize = size * 0.6;
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
-  ctx.font = `${fontSize}px ${labelFont}`;
-  const labelMetrics = ctx.measureText(label);
-  const textWidth = labelMetrics.width + 20;
-  let emojiY = size * 0.9;
+  // Set canvas size
+  canvas.width = size;
+  canvas.height = size;
 
-  let textHeight = size * 0.92;
+  // Draw emoji
+  ctx.font = `${size * 0.6}px Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(emoji, size / 2, size / 2);
 
-  const emojiFont = emojiStyle === EmojiStyle.APPLE ? "Apple Color Emoji" : "Noto Color Emoji";
-  ctx.font = `${size}px "${emojiFont}"`;
-  const emojiMetrics = ctx.measureText(emojiTxt);
-  const emojiWidth = emojiMetrics.width;
-
-  canvas.height = textHeight + size + 20;
-  canvas.width = Math.max(emojiWidth, textWidth);
-
-  ctx.font = `${size}px "${emojiFont}"`;
-  ctx.fillText(emojiTxt, textWidth / 2 - emojiWidth / 2 < 0 ? 0 : textWidth / 2 - emojiWidth / 2, emojiY);
-  ctx.font = `${fontSize}px ${labelFont}`;
-  ctx.strokeStyle = "white"; // Outline color
-  ctx.lineWidth = 8; // Outline width
-  ctx.lineJoin = "round";
-  ctx.strokeText(label, 10, size + size * 0.72);
-  ctx.fillText(label, 10, size + size * 0.72);
+  // Draw label if provided
+  if (label) {
+    ctx.font = `${size * 0.2}px Arial`;
+    ctx.fillStyle = "#563635";
+    ctx.fillText(label, size / 2, size * 0.8);
+  }
 
   return canvas.toDataURL();
 };
