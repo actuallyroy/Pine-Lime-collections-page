@@ -39,3 +39,83 @@ body {
   color: #563635;
 }
 
+
+.epr_-8ygbw8{
+  padding: 0px !important;
+}
+
+.epr-header-padding {
+  padding: 5px var(--epr-horizontal-padding) !important;
+}
+
+.epr_-rk4ix5{
+  font-family: 'Outfit', sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 200 !important;
+}
+.EmojiPickerReact {
+  background: transparent !important;
+  border: none !important;
+}
+
+@media (max-width: 420px) {
+  .EmojiPickerReact {
+    height: 210px !important;
+  }
+}
+
+.epr_-2zpaw9{
+  background: transparent !important;
+  border-color: rgba(86, 54, 53, 0.2) !important;
+  font-family: 'Outfit', sans-serif !important;
+}
+
+.split-map-cont {
+  position: relative;
+  width: 2400px;
+  height: 2400px;
+  display: flex;
+  justify-content: center;
+  background: white;
+  z-index: 1000;
+}
+.split-map {
+  position: absolute;
+  width: 66%;
+  height: 66%;
+  outline: 1px solid black;
+  box-shadow: -12px -12px 12px 0 rgba(0, 0, 0, 0.2);
+}
+.split-map-img {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.split-map-marker {
+  position: absolute;
+  overflow: hidden;
+}
+.split-map-marker img {
+  width: 120%;
+  height: 120%;
+  position: absolute;
+  object-fit: cover;
+  transform: translate(-50%, -50%);
+}
+.split-map-parts-cont{
+  top: 25%;
+  position: relative;
+  width: 1000px;
+  height: 1000px;
+  transform: scale(2);
+}
+.split-map-title{
+    position: absolute;
+    background-color: rgb(255, 243, 219);
+    left: 55%;
+    transform: translate(-50%, -50%);
+    bottom: 50px;
+}
