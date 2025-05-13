@@ -34,6 +34,7 @@ export default function JourneyMapPage() {
   const [hasPreviewedMap, setHasPreviewedMap] = useState(false);
   const [showPreviewWarning, setShowPreviewWarning] = useState(false);
   const [mapStyles, setMapStyles] = useState<MapStyle[]>([]);
+  const [modalKey, setModalKey] = useState(0);
 
   // Handle scroll for sticky add to cart on mobile
   useEffect(() => {
@@ -69,6 +70,7 @@ export default function JourneyMapPage() {
     setIsAddMarkerModalOpen(false);
     setEditingMarkerIndex(null);
     setEditingMarkerData(undefined);
+    setModalKey(prev => prev + 1);
   };
 
   // Add a marker
@@ -403,10 +405,18 @@ export default function JourneyMapPage() {
             <div className="text-sm text-[#563635]/60 line-through">${originalPrice.toFixed(2)}</div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="border-[#b7384e] text-[#b7384e]" onClick={handleOpenAddMarkerModal}>
-              Add Marker
+            <Button 
+              onClick={handleOpenPreviewModal} 
+              disabled={markers.length === 0} 
+              className="bg-[#563635] hover:bg-[#563635]/90 text-white"
+            >
+              Preview Map
             </Button>
-            <Button className="bg-[#b7384e] hover:bg-[#b7384e]/90 text-white" disabled={markers.length === 0} onClick={handleAddToCart}>
+            <Button 
+              className="bg-[#b7384e] hover:bg-[#b7384e]/90 text-white" 
+              disabled={markers.length === 0} 
+              onClick={handleAddToCart}
+            >
               <ShoppingCart className="h-4 w-4 mr-2" />
               Add to Cart
             </Button>
@@ -482,11 +492,26 @@ export default function JourneyMapPage() {
         </div>
       </div>
 
-      {/* Add Marker Modal */}
-      {isAddMarkerModalOpen && <AddMarkerModal onClose={handleCloseAddMarkerModal} onAddMarker={handleAddMarker} initialMarker={editingMarkerData} onUpdateMarker={handleUpdateMarker} />}
+      {/* Add Marker Modal - Always rendered but controlled by CSS */}
+      <div 
+        style={{ 
+          display: isAddMarkerModalOpen ? 'block' : 'none',
+          opacity: isAddMarkerModalOpen ? 1 : 0,
+          visibility: isAddMarkerModalOpen ? 'visible' : 'hidden',
+          pointerEvents: isAddMarkerModalOpen ? 'auto' : 'none'
+        }}
+      >
+        <AddMarkerModal 
+          key={modalKey}
+          onClose={handleCloseAddMarkerModal} 
+          onAddMarker={handleAddMarker} 
+          initialMarker={editingMarkerData} 
+          onUpdateMarker={handleUpdateMarker} 
+        />
+      </div>
 
       {/* Map Preview Modal */}
-      {isPreviewModalOpen && <MapPreviewModal onClose={handleClosePreviewModal} onSave={handleSaveMapSettings} markers={markers} title={mapTitle} initialSettings={mapData} />}
+      {isPreviewModalOpen && <MapPreviewModal onClose={handleClosePreviewModal} onSave={handleSaveMapSettings} markers={markers} title={mapTitle} initialSettings={mapData} frameSize={size} />}
 
       <ProductFooter />
     </div>

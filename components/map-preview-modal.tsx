@@ -21,6 +21,7 @@ interface MapPreviewModalProps {
   onSave: (settings: Partial<MapData>) => void
   markers: Array<Marker>
   title: string
+  frameSize: number | string
   initialSettings?: Partial<MapData>
 }
 
@@ -46,6 +47,7 @@ export default function MapPreviewModal({
   onSave,
   markers,
   title,
+  frameSize,
   initialSettings = { mapStyle: "vintage", routeType: "none", mapType: "fit" },
 }: MapPreviewModalProps) {
   const [activeTab, setActiveTab] = useState("style")
@@ -53,8 +55,6 @@ export default function MapPreviewModal({
   const [routeType, setRouteType] = useState(initialSettings.routeType || "none")
   const [mapType, setMapType] = useState(initialSettings.mapType || "custom")
   const [showLabels, setShowLabels] = useState(true)
-  const [imageWidth, setImageWidth] = useState(800)
-  const [imageHeight, setImageHeight] = useState(600)
   const [mapCenter, setMapCenter] = useState<[number, number]>(initialSettings.mapCenter || [0, 0])
   const [mapZoom, setMapZoom] = useState(initialSettings.mapZoom || 1)
   const [customStyles, setCustomStyles] = useState<MapStyle[]>([])
@@ -329,79 +329,14 @@ export default function MapPreviewModal({
       description: "Adjusts marker positions to avoid overlapping",
       image: "/placeholder.svg?height=120&width=120&text=Fit%20Markers",
     },
-    {
+    ...(markers.length >= 2 && markers.length <= 6 ? [{
       id: "split",
-      name: "Split Heart",
+      name: "Heart",
       description: "Creates a heart shape with each section showing a different location",
       image: "/placeholder.svg?height=120&width=120&text=Split%20Heart",
-    },
+    }] : []),
   ]
 
-  // Get the Mapbox Static Images API URL
-  const getMapboxStaticImageUrl = useMemo(() => {
-    // Check if we have a valid access token
-    const accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
-    const fallbackToken = 'pk.eyJ1IjoicGluZW5saW1lIiwiYSI6ImNrN3N6eTQ0bzByNmgzbXBsdmlwY25reDIifQ.QZROImVZfGk44ZIJLlYXQg';
-    const token = accessToken || fallbackToken;
-    
-    if (!token) {
-      console.error("Missing Mapbox access token in environment variables and no fallback available");
-      return "/placeholder.svg?height=800&width=800&text=Missing+Mapbox+Token";
-    }
-    
-    // Get style ID based on selected style
-    const styleId = mapStyle === 'vintage' ? 'ckknu6rsw62dq17nubbhdk7zg' :
-                   mapStyle === 'retro' ? 'ckkoxifdu2ish17pduguuwkk7' :
-                   mapStyle === 'minimal' ? 'ckqzddkfy3p9l18p7toi6zq4r' :
-                   mapStyle === 'satellite' ? 'cl8t7rd9t000214qs4xs9l5bn' :
-                   mapStyle === 'terrain' ? 'cl8t9aq3r001314pdcl2eil34' :
-                   mapStyle === 'dark' ? 'cl8t9r8kj000814nrakkfm353' :
-                   'ckknu6rsw62dq17nubbhdk7zg'; // default to vintage
-                   
-    // Construct URL using the provided reference pattern
-    const baseUrl = 'https://api.mapbox.com/styles/v1/pinenlime/';
-    const path = styleId + '/static/';
-    
-    // If no markers with coordinates, use default location (New York)
-    const hasCoordinates = markers.some(marker => marker.markerCoordinates);
-    console.log("Has markers with coordinates:", hasCoordinates);
-    
-    let longitude, latitude;
-    
-    if (hasCoordinates) {
-      // Find a marker with coordinates to use as center
-      const centerMarker = markers.find(marker => marker.markerCoordinates);
-      // Use calculated center and zoom if available, otherwise use first marker
-      longitude = centerMarker ? centerMarker.markerCoordinates![0] : mapCenter[0];
-      latitude = centerMarker ? centerMarker.markerCoordinates![1] : mapCenter[1];
-    } else {
-      // Default to Dubai's coordinates as a fallback
-      longitude = 55.2708;
-      latitude = 25.2048;
-    }
-    
-    const coords = longitude + ',' + latitude + ',' + mapZoom + ',0';
-    
-    const size = `/${imageWidth}x${imageHeight}@2x`;
-    const params = `?access_token=${token}&logo=false&attribution=false`;
-    
-    const url = baseUrl + path + coords + size + params;
-    console.log("Generated Mapbox URL:", url);
-    return url;
-  }, [mapStyle, mapCenter, mapZoom, imageWidth, imageHeight, markers]);
-
-  // Project geographical coordinates to pixel coordinates for marker positioning
-  const getMarkerPixelCoordinates = (markerCoords: [number, number]) => {
-    // This function would normally use the Mapbox GL's project function
-    // Since we're using a static image, we'll use a simplified version
-    return projectCoordinatesToPixels(
-      markerCoords,
-      mapCenter,
-      mapZoom,
-      imageWidth,
-      imageHeight
-    );
-  };
 
   const handleSave = () => {
     // Get the final map state from the map instance
@@ -583,8 +518,8 @@ export default function MapPreviewModal({
           <div className="w-full h-full relative">
             <MapboxMap
               markers={markers}
-              intrinsicHeight="8in"
-              intrinsicWidth="8in"
+              intrinsicHeight={`${frameSize}in`}
+              intrinsicWidth={`${frameSize}in`}
               showFullScreen={false}
               showNavigation={false}
               fitToMarkers={false} // Disable automatic fitting since we handle it manually
@@ -675,8 +610,8 @@ export default function MapPreviewModal({
           <div className="w-full h-full relative">
             <MapboxMap
               markers={markers}
-              intrinsicHeight="8in"
-              intrinsicWidth="8in"
+              intrinsicHeight={`${frameSize}in`}
+              intrinsicWidth={`${frameSize}in`}
               showFullScreen={false}
               showNavigation={true}
               style={getCurrentMapStyle()}
@@ -704,32 +639,11 @@ export default function MapPreviewModal({
     }
   }
 
-  // Helper functions for split heart map
-  function getSplitHeartSection(index: number, total: number) {
-    // This is a simplified example - in a real implementation, you'd calculate actual heart sections
-    // For now, we'll just return a placeholder path for demonstration
-    const startAngle = (index / total) * 360
-    const endAngle = ((index + 1) / total) * 360
-
-    // Heart shape is centered at (50, 50) with radius ~40
-    return `M 50 50 L ${50 + 40 * Math.cos((startAngle * Math.PI) / 180)} ${50 + 40 * Math.sin((startAngle * Math.PI) / 180)} A 40 40 0 0 1 ${50 + 40 * Math.cos((endAngle * Math.PI) / 180)} ${50 + 40 * Math.sin((endAngle * Math.PI) / 180)} Z`
-  }
-
-  function getHeartSectionCenter(index: number, total: number) {
-    // Calculate the center point of each heart section
-    const angle = ((index + 0.5) / total) * 360
-    const radius = 25 // Slightly smaller than the section radius
-    return {
-      x: 50 + radius * Math.cos((angle * Math.PI) / 180),
-      y: 50 + radius * Math.sin((angle * Math.PI) / 180),
-    }
-  }
-
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-hidden">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl h-[90vh] flex flex-col md:flex-row">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-full sm:max-w-5xl h-[95vh] sm:h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center justify-between p-2 sm:p-4 border-b">
           <h2 className="text-xl font-bold text-[#563635]">Preview Your Journey Map</h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-5 w-5" />
@@ -745,8 +659,8 @@ export default function MapPreviewModal({
           </div>
 
           {/* Settings panel */}
-          <div className="w-full md:w-80 border-t md:border-l flex flex-col h-[360px]">
-            <div className="p-4 flex-1 overflow-auto">
+          <div className="w-full md:w-80 border-t md:border-l flex flex-col h-auto max-h-[50vh] md:max-h-full">
+            <div className="p-2 sm:p-4 flex-1 overflow-auto">
               <Tabs value={activeTab} onValueChange={handleTabChange}>
                 <TabsList className="w-full">
                   <TabsTrigger value="style" className="flex-1">Map Style</TabsTrigger>
@@ -771,7 +685,7 @@ export default function MapPreviewModal({
                         Loading map styles...
                       </div>
                     ) : (
-                      <div className="grid grid-cols-4 sm:grid-cols-3 gap-1.5 sm:max-h-[300px] overflow-y-auto">
+                      <div className="grid grid-cols-5 sm:grid-cols-3 md:grid-cols-4 gap-1.5 sm:max-h-[300px] overflow-y-auto">
                         {displayStyles.map(style => (
                           <button
                             key={style.styleId}
@@ -817,10 +731,10 @@ export default function MapPreviewModal({
                       {mapTypes.map((type) => (
                         <div
                           key={type.id}
-                          className={`p-2 border rounded-md cursor-pointer ${
+                          className={`p-2 border rounded-md ${
                             mapType === type.id
                               ? "border-[#b7384e] bg-[#b7384e]/5"
-                              : "border-[#563635]/20 hover:border-[#563635]/40"
+                              : "border-[#563635]/20"
                           }`}
                           onClick={() => handleMapTypeChange(type.id as "custom" | "fit" | "split")}
                         >
@@ -860,7 +774,7 @@ export default function MapPreviewModal({
                 </TabsContent>
               </Tabs>
             </div>
-            <div className="p-4 border-t">
+            <div className="p-2 sm:p-4 border-t">
               <Button onClick={handleSave} className="w-full bg-[#b7384e] hover:bg-[#b7384e]/90 text-white">
                 Save Settings
               </Button>

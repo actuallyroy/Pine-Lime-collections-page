@@ -199,8 +199,15 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-hidden">
-      <div className="bg-white rounded-lg shadow-xl w-full md:max-w-5xl h-full md:h-[80vh] flex flex-col">
+    <div 
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-hidden transition-opacity duration-200"
+      style={{ 
+        opacity: 1,
+        visibility: 'visible',
+        pointerEvents: 'auto'
+      }}
+    >
+      <div className="bg-white rounded-lg shadow-xl w-full md:max-w-5xl h-full md:h-[80vh] flex flex-col transform transition-transform duration-200">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-xl font-bold text-[#563635]">Add a Marker</h2>
@@ -211,7 +218,7 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
         </div>
 
         {/* Main content */}
-        <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
+        <div className="flex flex-1 flex-col-reverse md:flex-row overflow-hidden">
           {/* Left sidebar */}
           <div className="w-full md:w-80 h-1/2 md:h-full border-b md:border-r bg-[#fcf8ed] flex flex-col relative">
             {/* Scrollable content with bottom padding for button */}
