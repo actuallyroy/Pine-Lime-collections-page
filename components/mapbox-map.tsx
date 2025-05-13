@@ -6,6 +6,8 @@ import "mapbox-gl/dist/mapbox-gl.css"
 import "../styles/mapbox-overrides.css" // Import Mapbox overrides
 import { setMapInstance } from "../utils/mapUtils" // Import the setMapInstance function
 import { generateMarkerImg } from "@/lib/map-utils"
+import { getRoute } from "@/lib/map-utils"
+import * as turf from "@turf/turf"
 
 // Use a mapbox token from env or fallback to a public token
 const mbToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || 'pk.eyJ1IjoicGluZW5saW5lIiwiYSI6ImNrN3N6eTQ0bzByNmgzbXBsdmlwY25reDIifQ.QZROImVZfGk44ZIJLlYXQg'
@@ -18,6 +20,78 @@ const sizeMap = {
   L: 24
 };
 
+
+function getNegativeColor(color: string) {
+  // HEX format
+  if (color.charAt(0) == "#") {
+    const hex = color.substring(1);
+    const bigint = parseInt(hex, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+
+    const invertedR = 255 - r;
+    const invertedG = 255 - g;
+    const invertedB = 255 - b;
+
+    return `#${((1 << 24) + (invertedR << 16) + (invertedG << 8) + invertedB).toString(16).slice(1)}`;
+  }
+
+  // RGB format
+  if (color.startsWith("rgb")) {
+    const matches = color.match(/(\d+),\s*(\d+),\s*(\d+)/);
+    if (!matches) {
+      throw new Error("Invalid RGB color format");
+    }
+    const invertedR = 255 - parseInt(matches[1]);
+    const invertedG = 255 - parseInt(matches[2]);
+    const invertedB = 255 - parseInt(matches[3]);
+
+    return `rgb(${invertedR}, ${invertedG}, ${invertedB})`;
+  }
+
+  // HSL format
+  if (color.startsWith("hsl")) {
+    const matches = color.match(/(\d+),\s*(\d+)%,\s*(\d+)%/);
+    if (!matches) {
+      throw new Error("Invalid HSL color format");
+    }
+    const invertedH = (parseInt(matches[1]) + 180) % 360;
+    const invertedS = 100 - parseInt(matches[2]);
+    const invertedL = 100 - parseInt(matches[3]);
+
+    return `hsl(${invertedH}, ${invertedS}%, ${invertedL}%)`;
+  }
+
+  throw new Error("Unsupported color format");
+}
+
+function colorToHex(color: string) {
+  // Create a temporary div to utilize browser's ability to convert colors
+  const div = document.createElement("div");
+  div.style.color = color;
+
+  // Attach the div to the body to compute the computed style
+  document.body.appendChild(div);
+
+  // Get the computed style
+  const computedColor = getComputedStyle(div).color;
+
+  // Remove the div after getting the computed style
+  document.body.removeChild(div);
+
+  // Extract the RGB values
+  const match = computedColor.match(/\d+/g);
+  if (!match) {
+    throw new Error("Invalid color format");
+  }
+  const [r, g, b] = match;
+
+  // Convert RGB to Hex
+  const hex = `${Number(r).toString(16).padStart(2, "0")}${Number(g).toString(16).padStart(2, "0")}${Number(b).toString(16).padStart(2, "0")}`;
+
+  return hex.toUpperCase();
+}
 interface MapboxMapProps {
   initialCenter?: [number, number]
   initialZoom?: number
@@ -26,6 +100,7 @@ interface MapboxMapProps {
   onClick?: (coordinates: [number, number]) => void
   onMoveEnd?: (coordinates: [number, number]) => void
   onMove?: (coordinates: [number, number]) => void
+  routeType?: "air" | "road" | "none"
   style?: string // Accept a full style URL or style name
   intrinsicHeight?: string
   intrinsicWidth?: string
@@ -51,6 +126,7 @@ function MapboxMapInner({
   showFullScreen = true,
   showNavigation = true,
   fitToMarkers = false,
+  routeType = "none",
 }: MapboxMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<mapboxgl.Map | null>(null)
@@ -83,6 +159,100 @@ function MapboxMapInner({
     }
   }, [])
 
+  // // Function to display the route on the MAP
+  function displayRoute(coordinates: [number, number][]) {
+    // Check if the route source already exists
+    if (map.current?.getSource("route-source")) {
+      // Update the source data if the source exists
+    (map.current.getSource("route-source") as mapboxgl.GeoJSONSource).setData({
+      type: "Feature",
+      properties: {},
+      geometry: {
+        type: "LineString",
+        coordinates: coordinates,
+      },
+    });
+    } else {
+      const landColor = map.current?.getPaintProperty("land", "background-color") || 
+                      map.current?.getPaintProperty("background", "background-color");
+      // Add a new source and layer if they don't exist
+      map.current?.addSource("route-source", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: coordinates,
+          },
+        },
+      });
+
+      map.current?.addLayer({
+        id: "curved-line",
+        type: "line",
+        source: "route-source",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": getNegativeColor(landColor as string),
+          "line-width": 4,
+          // "line-pattern": ["image", "blue-line"]
+          "line-dasharray": [1, 1.5],
+        },
+      });
+    }
+  }
+
+  function renderRoute() {
+    if (markers.length < 2) {
+      if (map.current?.getSource("route-source")) {
+        map.current?.removeLayer("curved-line");
+        map.current?.removeSource("route-source");
+      }
+      return;
+    }
+    switch (routeType) {
+      case "air":
+        if (markers.length >= 2) {
+          let coordinates = markers.map((marker) => marker.markerLocation);
+          var line = turf.lineString(coordinates);
+          var curved = turf.bezierSpline(line, { sharpness: 1 });
+          setTimeout(() => {
+            displayRoute(curved.geometry.coordinates as [number, number][]);
+          }, 500);
+        }
+        break;
+      case "road":
+        if (markers.length >= 2) {
+          getRoute(
+            markers.map((marker) => marker.markerLocation),
+            map.current?.getZoom() || 15,
+            (err: any, coordinates: any) => {
+              if (err) {
+                console.log(err);
+                return;
+              }
+              setTimeout(() => {
+                displayRoute(coordinates);
+              }, 500);
+            }
+          );
+        }
+        break;
+      case "none":
+        if (map.current?.getSource("route-source")) {
+          map.current?.removeLayer("curved-line");
+          map.current?.removeSource("route-source");
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
   // Measure wrapper size and adjust scale based on intrinsic dimensions
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [visibleSize, setVisibleSize] = useState({ width: 0, height: 0 })
@@ -97,6 +267,7 @@ function MapboxMapInner({
     observer.observe(wrapperRef.current)
     return () => observer.disconnect()
   }, [])
+  
   useEffect(() => {
     if (!intrinsicWidth || !intrinsicHeight) {
       return
@@ -232,6 +403,11 @@ function MapboxMapInner({
           setMapError("Failed to load map")
         }
       })
+
+      // Initial route rendering
+      mapInstance.on("style.load", () => {
+        renderRoute();
+      });
 
       // Setup moveend handler with debounce
       const moveEndHandler = () => {
@@ -412,13 +588,16 @@ function MapboxMapInner({
     );
   }, [mapLoaded, fitToMarkers, markers]);
 
+
   // Compute container style: scale intrinsic dimensions or fill wrapper
   const containerStyle = intrinsicWidth && intrinsicHeight
     ? {
         width: intrinsicWidth,
         height: intrinsicHeight,
-        transform: `scale(${scale})`,
-        transformOrigin: "center",
+        position: "absolute",
+        top: "50%",
+        left: "50%",
+        transform: `translate(-50%, -50%) scale(${scale})`,
       }
     : { width: "100%", height: "100%" }
 
@@ -426,11 +605,11 @@ function MapboxMapInner({
     <div ref={wrapperRef} className="relative w-full h-full overflow-hidden">
       <div
         ref={mapContainer}
-        style={containerStyle}
+        style={containerStyle as React.CSSProperties}
       />
       {!mapLoaded && (
         <div style={{
-          position: "absolute",
+          position: "absolute" as const,
           top: 0,
           left: 0,
           width: "100%",

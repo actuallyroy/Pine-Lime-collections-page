@@ -137,3 +137,57 @@ export function calculateMapBounds(
   
   return [minLng, minLat, maxLng, maxLat];
 } 
+
+// Function to handle large distance routes on map.
+function handleLargeDistance(coordinates: [number, number][], zoomLevel: number, callback: (error: any, result: any) => void) {
+  let allRoutes: [number, number][] = [];
+  let processCount = 0;
+
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    getRoute([coordinates[i], coordinates[i + 1]], zoomLevel, (error, route) => {
+      processCount++;
+      if (error) {
+        callback(error, []);
+        return;
+      }
+      allRoutes = allRoutes.concat(route);
+
+      // Check if all routes have been processed
+      if (processCount === coordinates.length - 1) {
+        callback(null, allRoutes);
+      }
+    }, "driving"); // You can choose to use "walking" here if it makes more sense for your application
+  }
+}
+
+export function getRoute(coordinates: [number, number][], zoomLevel: number, callback: (error: any, result: any) => void, mode = "walking") {
+  const overview = zoomLevel >= 13.7 ? 'full' : 'simplified'
+  console.log(overview);
+
+  var url = coordinates.join(";") + "?alternatives=false&geometries=geojson&language=en&overview=" + overview + "&steps=false&access_token=" + process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+
+  fetch(`https://api.mapbox.com/directions/v5/mapbox/${mode}/` + url)
+    .then((response) => {
+      if (response.status === 422 && mode === "walking") {
+        // Try driving mode if walking fails with status 422
+        return getRoute(coordinates, zoomLevel, callback, "driving");
+      }
+      return response.json();
+    })
+    .then((data) => {
+      if (!data || data.code === "InvalidInput") {
+        // Handle the case for route exceeding maximum distance
+        return handleLargeDistance(coordinates, zoomLevel, callback);
+      }
+
+      // Process and return the route
+      let res: [number, number][] = [];
+      data.routes[0].geometry.coordinates.forEach((coordinate: [number, number]) => {
+        res.push(coordinate);
+      });
+      callback(null, res);
+    })
+    .catch((error) => {
+      callback(error, []);
+    });
+}

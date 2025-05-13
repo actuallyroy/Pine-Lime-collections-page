@@ -306,9 +306,22 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
                   </p>
                 </div>
 
+                {/* Label input */}
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-[#563635]">Step 2: Add Label (Optional)</h3>
+                  <Input
+                    type="text"
+                    placeholder="Enter a label for this marker"
+                    value={markerLabel}
+                    onChange={(e) => setMarkerLabel(e.target.value)}
+                    className="border-[#563635]/20 focus-visible:ring-[#b7384e]"
+                  />
+                </div>
+
+
                 {/* Emoji Picker Selection */}
                 <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-[#563635]">Step 2: Choose an Emoji</h3>
+                  <h3 className="text-sm font-medium text-[#563635]">Step 3: Choose an Emoji</h3>
                   <EmojiPicker
                     onEmojiClick={handleEmojiClick}
                     width="100%"
@@ -322,7 +335,7 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
 
                 {/* Marker size selection */}
                 <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-[#563635]">Step 3: Choose Marker Size</h3>
+                  <h3 className="text-sm font-medium text-[#563635]">Step 4: Choose Marker Size</h3>
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { size: "S", label: "Small" },
@@ -345,22 +358,10 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
                   </div>
                 </div>
 
-                {/* Label input */}
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-[#563635]">Step 4: Add Label (Optional)</h3>
-                  <Input
-                    type="text"
-                    placeholder="Enter a label for this marker"
-                    value={markerLabel}
-                    onChange={(e) => setMarkerLabel(e.target.value)}
-                    className="border-[#563635]/20 focus-visible:ring-[#b7384e]"
-                  />
-                </div>
-
                 {/* Instructions */}
                 <div className="space-y-2">
                   <h3 className="text-sm font-medium text-[#563635]">Step 5: Place Your Marker</h3>
-                  <p className="text-xs text-[#563635]/70">Click on the map to place your marker at the exact location</p>
+                  <p className="text-xs text-[#563635]/70">Pan around the map to place your marker at the exact location</p>
                   <div className="flex items-center gap-2 p-2 bg-[#563635]/5 rounded-md">
                     <div className="text-xl">{selectedEmoji}</div>
                     <div className="text-sm text-[#563635]">
