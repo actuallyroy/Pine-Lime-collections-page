@@ -20,7 +20,7 @@ import { fetchMapStyles, MapStyle } from "@/lib/map-styles";
 
 export default function JourneyMapPage() {
   const [frame, setFrame] = useState("brown");
-  const [size, setSize] = useState("8");
+  const [size, setSize] = useState("8 in");
   const [price, setPrice] = useState(69.99);
   const [originalPrice, setOriginalPrice] = useState(79.99);
   const [isSticky, setIsSticky] = useState(false);
@@ -30,11 +30,10 @@ export default function JourneyMapPage() {
   const [editingMarkerIndex, setEditingMarkerIndex] = useState<number | null>(null);
   const [editingMarkerData, setEditingMarkerData] = useState<Marker | undefined>(undefined);
   const [mapTitle, setMapTitle] = useState("Our Journey");
-  const [mapData, setMapData] = useState<Partial<MapData>>({ mapStyle: "default", routeType: "none", mapType: "custom" });
+  const [mapData, setMapData] = useState<Partial<MapData>>({ mapStyle: "default", routeType: "none", mapType: "fit" });
   const [hasPreviewedMap, setHasPreviewedMap] = useState(false);
   const [showPreviewWarning, setShowPreviewWarning] = useState(false);
   const [mapStyles, setMapStyles] = useState<MapStyle[]>([]);
-  const [modalKey, setModalKey] = useState(0);
 
   // Handle scroll for sticky add to cart on mobile
   useEffect(() => {
@@ -72,7 +71,6 @@ export default function JourneyMapPage() {
     setIsAddMarkerModalOpen(false);
     setEditingMarkerIndex(null);
     setEditingMarkerData(undefined);
-    setModalKey(prev => prev + 1);
   };
 
   // Add a marker
@@ -271,9 +269,9 @@ export default function JourneyMapPage() {
                 <h3 className="text-lg font-medium text-[#563635] mb-3">Size</h3>
                 <RadioGroup value={size} onValueChange={setSize} className="flex flex-wrap gap-3">
                   {[
-                    { value: "4", label: "4x4 in", price: "$69.99" },
-                    { value: "6", label: "6x6 in", price: "$89.99" },
-                    { value: "8", label: "8x8 in", price: "$109.99" },
+                    { value: "4 in", label: "4x4 in", price: "$69.99" },
+                    { value: "6 in", label: "6x6 in", price: "$89.99" },
+                    { value: "8 in", label: "8x8 in", price: "$109.99" },
                   ].map((option) => (
                     <Label key={option.value} htmlFor={`size-${option.value}`} className={`flex items-center justify-between px-4 py-3 border rounded-md cursor-pointer ${size === option.value ? "border-[#b7384e] bg-[#b7384e]/5" : "border-[#563635]/20 hover:border-[#563635]/40"}`}>
                       <div className="flex items-center gap-2">
@@ -509,7 +507,6 @@ export default function JourneyMapPage() {
         }}
       >
         <AddMarkerModal 
-          key={modalKey}
           onClose={handleCloseAddMarkerModal} 
           onAddMarker={handleAddMarker} 
           initialMarker={editingMarkerData} 

@@ -443,10 +443,13 @@ function MapboxMapInner({
           mapInstance.off("dragend", () => {})
           mapInstance.off("zoomstart", () => {})
           mapInstance.off("zoomend", () => {})
-          mapInstance.remove()
+          // Defer removal to avoid blocking the UI thread
+          setTimeout(() => {
+            mapInstance.remove();
+          }, 0);
         }
-        map.current = null
-        setMapInstance(null) // Reset global reference on unmount
+        map.current = null;
+        setMapInstance(null); // Reset global reference on unmount
       }
     } catch (error) {
       console.error("Error initializing map:", error)

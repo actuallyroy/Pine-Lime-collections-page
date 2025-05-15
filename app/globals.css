@@ -115,7 +115,7 @@ body {
 .split-map-title{
     position: absolute;
     background-color: rgb(255, 243, 219);
-    left: 55%;
+    left: 0%;
     transform: translate(-50%, -50%);
     bottom: 50px;
 }

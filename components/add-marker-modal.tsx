@@ -10,7 +10,9 @@ import MapboxMap from "./mapbox-map"
 import mapboxgl from "mapbox-gl"
 // Set the Mapbox access token for Geocoding API
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
-import EmojiPicker, { EmojiStyle } from 'emoji-picker-react'
+import dynamic from 'next/dynamic'
+const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false })
+import { EmojiStyle } from 'emoji-picker-react'
 import { generateMarkerImg } from "@/lib/map-utils"
 
 interface AddMarkerModalProps {
@@ -34,6 +36,23 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
   const [markerPosition, setMarkerPosition] = useState<[number, number]>(initialMarker?.markerCoordinates || [55.14, 25.069])
   const [markerSize, setMarkerSize] = useState<"L" | "M" | "S">(initialMarker?.markerSize || "M")
   
+  // Update state when initialMarker changes
+  useEffect(() => {
+    if (initialMarker) {
+      setSearchQuery(initialMarker.locationName || "");
+      setSelectedEmoji(initialMarker.markerEmoji || "❤️");
+      setMarkerLabel(initialMarker.markerLabel || "");
+      setMarkerPosition(initialMarker.markerCoordinates || [55.14, 25.069]);
+      setMarkerSize(initialMarker.markerSize || "M");
+      
+      // Update map center
+      if (initialMarker.markerLocation) {
+        mapCenterRef.current = [initialMarker.markerLocation[0], initialMarker.markerLocation[1]];
+        setMapCenter([initialMarker.markerLocation[0], initialMarker.markerLocation[1]]);
+      }
+    }
+  }, [initialMarker]);
+
   // Location search related states
   const [isSearchingLocation, setIsSearchingLocation] = useState(false)
   const [locationSuggestions, setLocationSuggestions] = useState<Array<{
@@ -171,7 +190,7 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
       }
     }
     const markerDataObj: Marker = {
-      markerId: initialMarker?.markerId || "",
+      markerId: initialMarker?.markerId || `marker-${Date.now()}`, // Generate a new ID only if not editing
       markerEmoji: selectedEmoji,
       markerLabel: markerLabel,
       markerLocation: [markerPosition[0], markerPosition[1]],
@@ -185,7 +204,7 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
       onAddMarker(markerDataObj);
     }
     onClose();
-  }, [markerPosition, searchQuery, selectedEmoji, markerLabel, markerSize, onAddMarker, onUpdateMarker, onClose, isEditMode, emojiPickerStyle]);
+  }, [markerPosition, searchQuery, selectedEmoji, markerLabel, markerSize, onAddMarker, onUpdateMarker, onClose, isEditMode, initialMarker]);
 
   // Handle suggestion selection
   const handleSelectLocation = useCallback((suggestion: { place_name: string; center: [number, number] }) => {

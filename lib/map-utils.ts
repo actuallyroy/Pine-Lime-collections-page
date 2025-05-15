@@ -176,13 +176,17 @@ export function getRoute(coordinates: [number, number][], zoomLevel: number, cal
       return response.json();
     })
     .then((data) => {
+      // If API indicates invalid input or too large for a single request, split the route
       if (!data || data.code === "InvalidInput") {
-        // Handle the case for route exceeding maximum distance
         return handleLargeDistance(coordinates, zoomLevel, callback);
       }
-
-      // Process and return the route
-      let res: [number, number][] = [];
+      // If no route is found, return empty result
+      if (data.code === "NoRoute" || !data.routes || data.routes.length === 0) {
+        callback(null, coordinates);
+        return;
+      }
+      // Process and return the successful route
+      const res: [number, number][] = [];
       data.routes[0].geometry.coordinates.forEach((coordinate: [number, number]) => {
         res.push(coordinate);
       });
