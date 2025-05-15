@@ -831,9 +831,9 @@ export default function MapPreviewModal({ onClose, onSave, markers, title, frame
     const [lng, lat] = marker.markerCoordinates || marker.markerLocation;
     const coords = `${lng},${lat},12,0`;
     // Generate marker image as dataURL
-    const dataUrl = generateMarkerImg(marker.markerEmoji, marker.markerLabel, sizeMap[marker.markerSize]) as string;
+    // const dataUrl = generateMarkerImg(marker.markerEmoji, marker.markerLabel, sizeMap[marker.markerSize]) as string;
     // Use the API endpoint to convert dataURL to PNG
-    const markerApiUrl = encodeURIComponent(`https://collections.pinenlime.com/api/marker?dataurl=${encodeURIComponent(dataUrl)}`);
+    const markerApiUrl = encodeURIComponent(`https://collections.pinenlime.com/api/generate-marker?emoji=${marker.markerEmoji}&label=${marker.markerLabel}&size=${marker.markerSize}`);
     // Return Mapbox static map URL with custom marker overlay
     return `https://api.mapbox.com/styles/v1/pinenlime/${styleId}/static/url-${markerApiUrl}(${lng},${lat})/${coords}/${parseInt(frameSize as string) * 48}x${parseInt(frameSize as string) * 48}@2x?access_token=${token}&logo=false&attribution=false`;
   };
