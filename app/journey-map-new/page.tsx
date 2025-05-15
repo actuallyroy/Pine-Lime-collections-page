@@ -20,7 +20,7 @@ import { fetchMapStyles, MapStyle } from "@/lib/map-styles";
 
 export default function JourneyMapPage() {
   const [frame, setFrame] = useState("brown");
-  const [size, setSize] = useState("8");
+  const [size, setSize] = useState("8 in");
   const [price, setPrice] = useState(69.99);
   const [originalPrice, setOriginalPrice] = useState(79.99);
   const [isSticky, setIsSticky] = useState(false);
@@ -30,13 +30,15 @@ export default function JourneyMapPage() {
   const [editingMarkerIndex, setEditingMarkerIndex] = useState<number | null>(null);
   const [editingMarkerData, setEditingMarkerData] = useState<Marker | undefined>(undefined);
   const [mapTitle, setMapTitle] = useState("Our Journey");
-  const [mapData, setMapData] = useState<Partial<MapData>>({ mapStyle: "default", routeType: "none", mapType: "custom" });
+  const [mapData, setMapData] = useState<Partial<MapData>>({ mapStyle: "default", routeType: "none", mapType: "fit" });
   const [hasPreviewedMap, setHasPreviewedMap] = useState(false);
   const [showPreviewWarning, setShowPreviewWarning] = useState(false);
   const [mapStyles, setMapStyles] = useState<MapStyle[]>([]);
 
   // Handle scroll for sticky add to cart on mobile
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     const handleScroll = () => {
       const scrollPosition = window.scrollY;
       setIsSticky(scrollPosition > 500);
@@ -127,9 +129,14 @@ export default function JourneyMapPage() {
     if (!hasPreviewedMap && markers.length > 0) {
       setShowPreviewWarning(true);
       // Scroll to warning
-      setTimeout(() => {
-        document.getElementById("preview-warning")?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          const warningElement = document.getElementById("preview-warning");
+          if (warningElement) {
+            warningElement.scrollIntoView({ behavior: "smooth" });
+          }
+        }, 100);
+      }
     } else {
       // Add to cart logic here
       console.log("Adding to cart:", { markers, mapTitle, mapData, frame, size });
@@ -262,9 +269,9 @@ export default function JourneyMapPage() {
                 <h3 className="text-lg font-medium text-[#563635] mb-3">Size</h3>
                 <RadioGroup value={size} onValueChange={setSize} className="flex flex-wrap gap-3">
                   {[
-                    { value: "4", label: "4x4 in", price: "$69.99" },
-                    { value: "6", label: "6x6 in", price: "$89.99" },
-                    { value: "8", label: "8x8 in", price: "$109.99" },
+                    { value: "4 in", label: "4x4 in", price: "$69.99" },
+                    { value: "6 in", label: "6x6 in", price: "$89.99" },
+                    { value: "8 in", label: "8x8 in", price: "$109.99" },
                   ].map((option) => (
                     <Label key={option.value} htmlFor={`size-${option.value}`} className={`flex items-center justify-between px-4 py-3 border rounded-md cursor-pointer ${size === option.value ? "border-[#b7384e] bg-[#b7384e]/5" : "border-[#563635]/20 hover:border-[#563635]/40"}`}>
                       <div className="flex items-center gap-2">
@@ -403,10 +410,18 @@ export default function JourneyMapPage() {
             <div className="text-sm text-[#563635]/60 line-through">${originalPrice.toFixed(2)}</div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="border-[#b7384e] text-[#b7384e]" onClick={handleOpenAddMarkerModal}>
-              Add Marker
+            <Button 
+              onClick={handleOpenPreviewModal} 
+              disabled={markers.length === 0} 
+              className="bg-[#563635] hover:bg-[#563635]/90 text-white"
+            >
+              Preview Map
             </Button>
-            <Button className="bg-[#b7384e] hover:bg-[#b7384e]/90 text-white" disabled={markers.length === 0} onClick={handleAddToCart}>
+            <Button 
+              className="bg-[#b7384e] hover:bg-[#b7384e]/90 text-white" 
+              disabled={markers.length === 0} 
+              onClick={handleAddToCart}
+            >
               <ShoppingCart className="h-4 w-4 mr-2" />
               Add to Cart
             </Button>
@@ -482,11 +497,25 @@ export default function JourneyMapPage() {
         </div>
       </div>
 
-      {/* Add Marker Modal */}
-      {isAddMarkerModalOpen && <AddMarkerModal onClose={handleCloseAddMarkerModal} onAddMarker={handleAddMarker} initialMarker={editingMarkerData} onUpdateMarker={handleUpdateMarker} />}
+      {/* Add Marker Modal - Always rendered but controlled by CSS */}
+      <div 
+        style={{ 
+          display: isAddMarkerModalOpen ? 'block' : 'none',
+          opacity: isAddMarkerModalOpen ? 1 : 0,
+          visibility: isAddMarkerModalOpen ? 'visible' : 'hidden',
+          pointerEvents: isAddMarkerModalOpen ? 'auto' : 'none'
+        }}
+      >
+        <AddMarkerModal 
+          onClose={handleCloseAddMarkerModal} 
+          onAddMarker={handleAddMarker} 
+          initialMarker={editingMarkerData} 
+          onUpdateMarker={handleUpdateMarker} 
+        />
+      </div>
 
       {/* Map Preview Modal */}
-      {isPreviewModalOpen && <MapPreviewModal onClose={handleClosePreviewModal} onSave={handleSaveMapSettings} markers={markers} title={mapTitle} initialSettings={mapData} />}
+      {isPreviewModalOpen && <MapPreviewModal onClose={handleClosePreviewModal} onSave={handleSaveMapSettings} markers={markers} title={mapTitle} initialSettings={mapData} frameSize={size} />}
 
       <ProductFooter />
     </div>

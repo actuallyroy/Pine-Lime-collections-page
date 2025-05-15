@@ -62,6 +62,7 @@ export function projectCoordinatesToPixels(
 
 // Add marker image generation function
 export const generateMarkerImg = (emojiTxt: string, label: string, size: number = 20, labelFont: string = "Arial", emojiStyle: EmojiStyle = EmojiStyle.GOOGLE) => {
+  if (typeof document === 'undefined') return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABsAAAA+CAYAAADatWDQAAAAAXNSR0IArs4c6QAABCxJREFUWEftlltMHHUUxr8zs7cul6WgBmgKFGkXu7aA3cXE2gYW1BgTjWl800Sjj5omfTPGy4vGaIyvJiaNSV/V1PbBRK0+GAO7sAto0RAKioW2W+67M3ubmf8xs2U3UJa6CxtfnHnanTnn/OZ8850zQ/gPDyrGmur2BVwuezeTdEoTzC5JitbG0xc8k5MrxeJvnex5lkjqiOv8mAS6DfAP7cPRbwgwNsdvgXFfm0uh+z4iojdAdy5ldIHFNCOpM1fLePtIOPp+vgA/ebxKNVxfAXgqf04zGAmNsZYR2SqJzz4YHvssf60A48eP7Vcdrp9B5LMdbIG8vwHaX7MQ8XWAGbEUYzUj4Lbh3NFw9FPu67OpknoJRE87vA9BcruR+eN3cDqVq61qjOuKAY8d5w+Hoq+a5wqwRDDwORG95uzqhq2xOZcg1laRCg0VlLihGlA05jqZex6otp0F0Su25gNwHuvKxWSnp6DNzhTiF1RhxqNZ0h9uGpmYzMH4pLdGdXpW5IYGmyvwaCE4c/VX6Avzhf+6YMzEBWrtmGiqkrvMe3X3BUFOJ0QigdRICNCyhXglKzCfZNTa+NKRUPS5HEwZ8D8BSN/Z29rh8HYChoH0bxMwYre2+eF2SsBGQL1LAiQZ9kPtEGtrMFaWcnJvPnQhcC3O2Cfjpi8cad6ABV4E6IK9tQ2OzqNIj4/BiN0sOhSCGcQASUWNvCXHEIzpuIBDwvrxkUhdLiPZ7z8jJOlLyVOHfY8EoP70fUWmz3TmTEKYncV84UhjDpboD/hIoqvmb3tLK7S/5yoCUzWB6yqj2oZIZyjiv2MQgJSB3iXzUVSEslFkKWVgKQPUyfxBRzj6VkF4ZcD/CSCdqxiMGbNxAYOZm+YXahpjMbUAS53uPWTYMQ1ArgQwnhW4kWTU2OmKd3h0cMtQ56Y+2PsuE97bK4zNeUwIs4zWsjJ7f/3s6vo2GL8AWVkO/EhEp/cCXEoJLGcYHtl4viM8fjFfa9uwmDtScbiGiMi7G2DGYMwlBGoc+PDwUOTNzTWKTmYq2NOqkz1arjvNIZ5TBNwyfd0xPHrm7pvdcQ0kBv19xHTF3BWldGhulrmEAYlo3heOHCyWc8+dowQDLwM4D9p4ue1ANQ0xnxTQBa8fWP6zNW+IkjvLBypB/0sg+mLHDplhvkp0wYv1etzXNHZtcScl/n2bmuss2Bsk4ssAubcUMkFJASEw1RmO+O7+DCi7s0KH/b1dIFwEoS1/LpY0WBfiW29o7JlSnmtJneUL8eAJj8LyZQJOLaeMtMb8TsdQ9ONSQNuGupQkc/DjsROvr2WN0dbh8V9KydlxqMtJLje2LBnLLb5rg+wVtKtntheoJeNe1CvkWjJaMt5TAcsglkEsg1TEA5aMloy7V8BaxLvXblOmJaMlo7WIK+KB/6mM/wAoTrBOV4rBIQAAAABJRU5ErkJggg==";
   const canvas = document.createElement("canvas");
   let fontSize = size * 0.6;
   const ctx = canvas.getContext("2d");
@@ -175,13 +176,17 @@ export function getRoute(coordinates: [number, number][], zoomLevel: number, cal
       return response.json();
     })
     .then((data) => {
+      // If API indicates invalid input or too large for a single request, split the route
       if (!data || data.code === "InvalidInput") {
-        // Handle the case for route exceeding maximum distance
         return handleLargeDistance(coordinates, zoomLevel, callback);
       }
-
-      // Process and return the route
-      let res: [number, number][] = [];
+      // If no route is found, return empty result
+      if (data.code === "NoRoute" || !data.routes || data.routes.length === 0) {
+        callback(null, coordinates);
+        return;
+      }
+      // Process and return the successful route
+      const res: [number, number][] = [];
       data.routes[0].geometry.coordinates.forEach((coordinate: [number, number]) => {
         res.push(coordinate);
       });

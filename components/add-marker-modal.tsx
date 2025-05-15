@@ -10,7 +10,9 @@ import MapboxMap from "./mapbox-map"
 import mapboxgl from "mapbox-gl"
 // Set the Mapbox access token for Geocoding API
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
-import EmojiPicker, { EmojiStyle } from 'emoji-picker-react'
+import dynamic from 'next/dynamic'
+const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false })
+import { EmojiStyle } from 'emoji-picker-react'
 import { generateMarkerImg } from "@/lib/map-utils"
 
 interface AddMarkerModalProps {
@@ -34,6 +36,23 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
   const [markerPosition, setMarkerPosition] = useState<[number, number]>(initialMarker?.markerCoordinates || [55.14, 25.069])
   const [markerSize, setMarkerSize] = useState<"L" | "M" | "S">(initialMarker?.markerSize || "M")
   
+  // Update state when initialMarker changes
+  useEffect(() => {
+    if (initialMarker) {
+      setSearchQuery(initialMarker.locationName || "");
+      setSelectedEmoji(initialMarker.markerEmoji || "❤️");
+      setMarkerLabel(initialMarker.markerLabel || "");
+      setMarkerPosition(initialMarker.markerCoordinates || [55.14, 25.069]);
+      setMarkerSize(initialMarker.markerSize || "M");
+      
+      // Update map center
+      if (initialMarker.markerLocation) {
+        mapCenterRef.current = [initialMarker.markerLocation[0], initialMarker.markerLocation[1]];
+        setMapCenter([initialMarker.markerLocation[0], initialMarker.markerLocation[1]]);
+      }
+    }
+  }, [initialMarker]);
+
   // Location search related states
   const [isSearchingLocation, setIsSearchingLocation] = useState(false)
   const [locationSuggestions, setLocationSuggestions] = useState<Array<{
@@ -171,7 +190,7 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
       }
     }
     const markerDataObj: Marker = {
-      markerId: initialMarker?.markerId || "",
+      markerId: initialMarker?.markerId || `marker-${Date.now()}`, // Generate a new ID only if not editing
       markerEmoji: selectedEmoji,
       markerLabel: markerLabel,
       markerLocation: [markerPosition[0], markerPosition[1]],
@@ -185,7 +204,7 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
       onAddMarker(markerDataObj);
     }
     onClose();
-  }, [markerPosition, searchQuery, selectedEmoji, markerLabel, markerSize, onAddMarker, onUpdateMarker, onClose, isEditMode, emojiPickerStyle]);
+  }, [markerPosition, searchQuery, selectedEmoji, markerLabel, markerSize, onAddMarker, onUpdateMarker, onClose, isEditMode, initialMarker]);
 
   // Handle suggestion selection
   const handleSelectLocation = useCallback((suggestion: { place_name: string; center: [number, number] }) => {
@@ -199,8 +218,15 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-hidden">
-      <div className="bg-white rounded-lg shadow-xl w-full md:max-w-5xl h-full md:h-[80vh] flex flex-col">
+    <div 
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-hidden transition-opacity duration-200"
+      style={{ 
+        opacity: 1,
+        visibility: 'visible',
+        pointerEvents: 'auto'
+      }}
+    >
+      <div className="bg-white rounded-lg shadow-xl w-full md:max-w-5xl h-full md:h-[80vh] flex flex-col transform transition-transform duration-200">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-xl font-bold text-[#563635]">Add a Marker</h2>
@@ -211,7 +237,7 @@ export default function AddMarkerModal({ onClose, onAddMarker, initialMarker, on
         </div>
 
         {/* Main content */}
-        <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
+        <div className="flex flex-1 flex-col-reverse md:flex-row overflow-hidden">
           {/* Left sidebar */}
           <div className="w-full md:w-80 h-1/2 md:h-full border-b md:border-r bg-[#fcf8ed] flex flex-col relative">
             {/* Scrollable content with bottom padding for button */}
