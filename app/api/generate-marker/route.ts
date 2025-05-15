@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createCanvas, loadImage } from 'canvas';
+import { createCanvas, loadImage, registerFont } from 'canvas';
+
+// Register the font (do this only once, at the top)
+registerFont('public/fonts/NotoColorEmoji-Regular.ttf', { family: 'NotoColorEmoji' });
+registerFont('public/fonts/Outfit-Regular.ttf', { family: 'Outfit' });
 
 // Helper to convert emoji to Twemoji CDN URL
 function emojiToTwemojiUrl(emoji: string, size: number = 72) {
@@ -19,14 +23,14 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const emojiTxt = searchParams.get('emoji');
-    const label = searchParams.get('label');
+    const label = searchParams.get('label') || "";
     const size = parseInt(searchParams.get('size') || '20');
-    const labelFont = searchParams.get('labelFont') || 'Arial';
+    const labelFont = searchParams.get('labelFont') || 'Outfit';
     const emojiStyle = (searchParams.get('emojiStyle') as EmojiStyle) || 'GOOGLE';
 
-    if (!emojiTxt || !label) {
+    if (!emojiTxt) {
       return NextResponse.json(
-        { error: 'Missing required parameters: emoji and label' },
+        { error: 'Missing required parameters: emoji' },
         { status: 400 }
       );
     }
@@ -63,7 +67,7 @@ export async function GET(request: Request) {
     ctx.drawImage(emojiImg, (canvasWidth - size) / 2, 0, size, size);
 
     // Draw label
-    ctx.font = `${fontSize}px ${labelFont}`;
+    ctx.font = `${fontSize}px CustomFont`;
     ctx.strokeStyle = 'white';
     ctx.lineWidth = 8;
     ctx.lineJoin = 'round';
