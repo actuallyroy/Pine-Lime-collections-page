@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     const emojiTxt = searchParams.get('emoji');
     const label = searchParams.get('label') || "";
     const size = parseInt(searchParams.get('size') || '20');
-    const labelFont = searchParams.get('labelFont') || 'NotoColorEmoji';
+    const labelFont = searchParams.get('labelFont') || 'Outfit';
     const emojiStyle = (searchParams.get('emojiStyle') as EmojiStyle) || 'GOOGLE';
 
     if (!emojiTxt) {
