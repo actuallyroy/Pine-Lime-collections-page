@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { createCanvas, loadImage, registerFont } from 'canvas';
 
 // Register the font (do this only once, at the top)
-registerFont('public/fonts/NotoColorEmoji-Regular.ttf', { family: 'NotoColorEmoji' });
-registerFont('public/fonts/Outfit-Regular.ttf', { family: 'Outfit' });
+registerFont(process.cwd() + '/fonts/NotoColorEmoji-Regular.ttf', { family: 'NotoColorEmoji' });
+registerFont(process.cwd() + '/fonts/Outfit-Regular.ttf', { family: 'Outfit' });
 
 // Helper to convert emoji to Twemoji CDN URL
 function emojiToTwemojiUrl(emoji: string, size: number = 72) {
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     const emojiTxt = searchParams.get('emoji');
     const label = searchParams.get('label') || "";
     const size = parseInt(searchParams.get('size') || '20');
-    const labelFont = searchParams.get('labelFont') || 'Outfit';
+    const labelFont = searchParams.get('labelFont') || 'NotoColorEmoji';
     const emojiStyle = (searchParams.get('emojiStyle') as EmojiStyle) || 'GOOGLE';
 
     if (!emojiTxt) {
