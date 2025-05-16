@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { createCanvas, loadImage, registerFont } from 'canvas';
 
 // Register the font (do this only once, at the top)
-registerFont('public/fonts/NotoColorEmoji-Regular.ttf', { family: 'NotoColorEmoji' });
-registerFont('public/fonts/Outfit-Regular.ttf', { family: 'Outfit' });
+registerFont(process.cwd() + '/fonts/NotoColorEmoji-Regular.ttf', { family: 'NotoColorEmoji' });
+registerFont(process.cwd() + '/fonts/Outfit-Regular.ttf', { family: 'Outfit' });
 
 // Helper to convert emoji to Twemoji CDN URL
 function emojiToTwemojiUrl(emoji: string, size: number = 72) {
