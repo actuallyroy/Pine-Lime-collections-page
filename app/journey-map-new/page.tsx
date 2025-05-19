@@ -191,9 +191,9 @@ export default function JourneyMapPage() {
         "title": mapTitle,
         "frameColor": frameMap[frame as keyof typeof frameMap],
         "mapData": _mapData,
-        "product": "JOURNEY_MAP"
+        "product": "JOURNEY_MAP_V2"
       }
-      window.open(`https://www.pinenlime.com/shoppingcart?journeymapdata=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(productData))))}`, '_blank');
+      window.open(`https://www.pinenlime.com/shoppingcart?journeymapdata=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(productData))))}`);
     }
   };
 
