@@ -15,7 +15,7 @@ import ProductHeader from "@/components/product-header";
 import ProductFooter from "@/components/product-footer";
 import AddMarkerModal from "@/components/add-marker-modal";
 import MapPreviewModal from "@/components/map-preview-modal";
-import { cn } from "@/lib/utils";
+import { cn, uploadToS3 } from "@/lib/utils";
 import { fetchMapStyles, MapStyle } from "@/lib/map-styles";
 import { v4 as uuidv4 } from 'uuid';
 import { generateMapPreview } from "@/utils/mapUtils";
@@ -23,8 +23,8 @@ import { generateMapPreview } from "@/utils/mapUtils";
 export default function JourneyMapPage() {
   const [frame, setFrame] = useState("brown");
   const [size, setSize] = useState("8 in");
-  const [price, setPrice] = useState(69.99);
-  const [originalPrice, setOriginalPrice] = useState(79.99);
+  const [price, setPrice] = useState(199);
+  const [originalPrice, setOriginalPrice] = useState(399);
   const [quantity, setQuantity] = useState(1);
   const [isSticky, setIsSticky] = useState(false);
   const [isAddMarkerModalOpen, setIsAddMarkerModalOpen] = useState(false);
@@ -54,11 +54,11 @@ export default function JourneyMapPage() {
 
   // Update price based on selections
   useEffect(() => {
-    const basePrice = size === "a3" ? 69.99 : 89.99;
-    const framePrice = frame === "none" ? 0 : frame === "teak" ? 39.99 : 29.99;
+    const basePrice = size === "4 in" ? 200 : size === "6 in" ? 600 : 900;
+    const framePrice = frame === "none" ? 0 : frame === "brown" ? 299 : 299;
 
     setPrice(basePrice + framePrice);
-    setOriginalPrice((basePrice + framePrice) * 1.15); // 15% off
+    setOriginalPrice((basePrice + framePrice) * 1.2); // 15% off
   }, [size, frame]);
 
   useEffect(() => {
@@ -130,62 +130,72 @@ export default function JourneyMapPage() {
 
   // Handle add to cart
   const handleAddToCart = async () => {
-    debugger
-    if (!mapPreviewContainer.current) {
-      console.error("Map preview container not found");
-      return;
+    if (!hasPreviewedMap && markers.length > 0) {
+      setShowPreviewWarning(true);
+      // Scroll to warning
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          const warningElement = document.getElementById("preview-warning");
+          if (warningElement) {
+            warningElement.scrollIntoView({ behavior: "smooth" });
+          }
+        }, 100);
+      }
+    } else {
+      if (!mapPreviewContainer.current) {
+        console.error("Map preview container not found");
+        return;
+      }
+      mapPreviewContainer.current.style.height = mapData.mapHeight + "px";
+      mapPreviewContainer.current.style.width = mapData.mapWidth + "px";
+      const mapPreview = await generateMapPreview(mapPreviewContainer.current, markers, mapTitle, mapData as MapData, size);
+      const orderId = uuidv4();
+      const s3Response = await uploadToS3(mapPreview, orderId);
+      const _mapData = {
+        "mapStyle": mapData.mapStyle,
+        "mapType": mapData.mapType,
+        "routeColor": mapData.routeColor,
+        "mapZoom": mapData.mapZoom,
+        "mapCenter": mapData.mapCenter,
+        "markers": markers,
+        "routeType": mapData.routeType,
+        "title": mapData.title,
+        "mapBearing": mapData.mapBearing,
+      }
+      const sizeMap = {
+        "4 in": "4x4",
+        "6 in": "6x6",
+        "8 in": "8x8"
+      }
+      const frameMap = {
+        "brown": "Dark Brown",
+        "natural": "Natural"
+      }
+      const productData = {
+        "quantity": quantity,
+        "order_id": orderId,
+        "sku": "0055",
+        "s3Links": {
+          "objectURL": s3Response.url
+        },
+        "description": "A journey through the memories",
+        "_id": orderId,
+        "gifttext": mapTitle,
+        "currencySymbol": "₹",
+        "gift": true,
+        "frameSize": sizeMap[size as keyof typeof sizeMap],
+        "promptData": {},
+        "cost": price * quantity,
+        "map_type": "journeymap",
+        "product_id": "Journey Map",
+        "title": mapTitle,
+        "frameColor": frameMap[frame as keyof typeof frameMap],
+        "mapData": _mapData,
+        "product": "JOURNEY_MAP"
+      }
+      window.open(`https://www.pinenlime.com/shoppingcart?siteRevision=2&branchId=b0f7cbf8-2628-40ef-a77e-f763338ad500&journeyMapData=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(productData))))}`, '_blank');
+      // window.open(`https://www.pinenlime.com/shoppingcart?journeymapdata=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(productData))))}`, '_blank');
     }
-    mapPreviewContainer.current.style.height = mapData.mapHeight + "px";
-    mapPreviewContainer.current.style.width = mapData.mapWidth + "px";
-    const mapPreview = await generateMapPreview(mapPreviewContainer.current, markers, mapTitle, mapData as MapData);
-    console.log(mapPreview);
-    // if (!hasPreviewedMap && markers.length > 0) {
-    //   setShowPreviewWarning(true);
-    //   // Scroll to warning
-    //   if (typeof window !== 'undefined') {
-    //     setTimeout(() => {
-    //       const warningElement = document.getElementById("preview-warning");
-    //       if (warningElement) {
-    //         warningElement.scrollIntoView({ behavior: "smooth" });
-    //       }
-    //     }, 100);
-    //   }
-    // } else {
-    //   const _mapData = {
-    //     "mapStyle": mapData.mapStyle,
-    //     "mapType": mapData.mapType,
-    //     "routeColor": mapData.routeColor,
-    //     "mapZoom": mapData.mapZoom,
-    //     "mapCenter": mapData.mapCenter,
-    //     "markers": markers,
-    //     "routeType": mapData.routeType,
-    //     "title": mapData.title,
-    //     "mapBearing": mapData.mapBearing,
-    //   }
-    //   const productData = {
-    //     "quantity": quantity,
-    //     "order_id": uuidv4(),
-    //     "sku": "0055",
-    //     "s3Links": {
-    //       "objectURL": "https://pinelime-orders.s3.amazonaws.com/JourneyMap/"
-    //     },
-    //     "description": "A journey through the memories",
-    //     "_id": "fdsfdsfadsa",
-    //     "gifttext": "afdsfdsa",
-    //     "currencySymbol": "₹",
-    //     "gift": true,
-    //     "frameSize": "8x8",
-    //     "promptData": {},
-    //     "cost": 1274,
-    //     "map_type": "journeymap",
-    //     "product_id": "Journey Map",
-    //     "title": "a little piece of our hearts",
-    //     "frameColor": "Natural",
-    //     "mapData": {},
-    //     "product": "JOURNEY_MAP"
-    //   }
-    //   window.open(`https://www.pinenlime.com/shoppingcart?journeymapdata=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(_mapData))))}`, '_blank');
-    // }
   };
 
   // Get map type display name
@@ -268,8 +278,8 @@ export default function JourneyMapPage() {
                 </Badge>
               </div>
               <div className="mt-4 flex items-center gap-3">
-                <span className="text-3xl font-bold text-[#b7384e]">${price.toFixed(2)}</span>
-                <span className="text-lg text-[#563635]/60 line-through">${originalPrice.toFixed(2)}</span>
+                <span className="text-3xl font-bold text-[#b7384e]">₹{price.toFixed(2)}</span>
+                <span className="text-lg text-[#563635]/60 line-through">₹{originalPrice.toFixed(2)}</span>
               </div>
               <p className="mt-4 text-[#563635]/80">Visualize your travels and adventures in a beautiful custom map. Perfect for commemorating road trips, backpacking journeys, or any adventure that took you to multiple destinations.</p>
             </div>
@@ -289,8 +299,8 @@ export default function JourneyMapPage() {
                 <h3 className="text-lg font-medium text-[#563635] mb-3">Frame</h3>
                 <RadioGroup value={frame} onValueChange={setFrame} className="flex flex-wrap gap-3">
                   {[
-                    { value: "brown", label: "Dark Brown", price: "+$29.99" },
-                    { value: "natural", label: "Natural", price: "+$29.99" },
+                    { value: "brown", label: "Dark Brown", price: "+₹200" },
+                    { value: "natural", label: "Natural", price: "+₹200" },
                   ].map((option) => (
                     <Label key={option.value} htmlFor={`frame-${option.value}`} className={`flex items-center justify-between px-4 py-3 border rounded-md cursor-pointer ${frame === option.value ? "border-[#b7384e] bg-[#b7384e]/5" : "border-[#563635]/20 hover:border-[#563635]/40"}`}>
                       <div className="flex items-center gap-2">
@@ -302,7 +312,7 @@ export default function JourneyMapPage() {
                         )}
                         <span className={frame === option.value ? "text-[#b7384e]" : "text-[#563635]"}>{option.label}</span>
                       </div>
-                      <span className={`text-sm ${frame === option.value ? "text-[#b7384e]" : "text-[#563635]/70"}`}>{option.price}</span>
+                      {/* <span className={`text-sm ${frame === option.value ? "text-[#b7384e]" : "text-[#563635]/70"}`}>{option.price}</span> */}
                     </Label>
                   ))}
                 </RadioGroup>
@@ -313,9 +323,9 @@ export default function JourneyMapPage() {
                 <h3 className="text-lg font-medium text-[#563635] mb-3">Size</h3>
                 <RadioGroup value={size} onValueChange={setSize} className="flex flex-wrap gap-3">
                   {[
-                    { value: "4 in", label: "4x4 in", price: "$69.99" },
-                    { value: "6 in", label: "6x6 in", price: "$89.99" },
-                    { value: "8 in", label: "8x8 in", price: "$109.99" },
+                    { value: "4 in", label: "4x4 in", price: "+₹100" },
+                    { value: "6 in", label: "6x6 in", price: "+₹500" },
+                    { value: "8 in", label: "8x8 in", price: "+₹800" },
                   ].map((option) => (
                     <Label key={option.value} htmlFor={`size-${option.value}`} className={`flex items-center justify-between px-4 py-3 border rounded-md cursor-pointer ${size === option.value ? "border-[#b7384e] bg-[#b7384e]/5" : "border-[#563635]/20 hover:border-[#563635]/40"}`}>
                       <div className="flex items-center gap-2">
@@ -326,8 +336,8 @@ export default function JourneyMapPage() {
                           </svg>
                         )}
                         <span className={size === option.value ? "text-[#b7384e]" : "text-[#563635]"}>{option.label}</span>
-                      </div>
-                      <span className={`text-sm ${size === option.value ? "text-[#b7384e]" : "text-[#563635]/70"}`}>{option.price}</span>
+                      </div>&nbsp;
+                      {/* <span className={`text-sm ${size === option.value ? "text-[#b7384e]" : "text-[#563635]/70"}`}>{option.price}</span> */}
                     </Label>
                   ))}
                 </RadioGroup>

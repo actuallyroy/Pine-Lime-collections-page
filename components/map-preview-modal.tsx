@@ -513,8 +513,8 @@ function PersistentMap({ markers, frameSize, mapStyle, routeType, mapType, title
           top: `${offset.top}px`,
         }}
       />
-      <div className="absolute left-1/2 bottom-8 transform -translate-x-1/2 bg-white/90 px-4 py-2 rounded shadow-md">
-        <div className="text-center text-lg font-medium text-[#563635]">{title}</div>
+      <div className="absolute left-1/2 bottom-9 transform -translate-x-1/2 bg-white/90">
+        <div className="title">{title}</div>
       </div>
     </div>
   );
@@ -522,7 +522,7 @@ function PersistentMap({ markers, frameSize, mapStyle, routeType, mapType, title
 
 export default function MapPreviewModal({ onClose, onSave, markers, title, frameSize, initialSettings = { mapStyle: "vintage", routeType: "none", mapType: "fit" } }: MapPreviewModalProps) {
   const [activeTab, setActiveTab] = useState("style");
-  const [mapStyle, setMapStyle] = useState(initialSettings.mapStyle || "default");
+  const [mapStyle, setMapStyle] = useState(initialSettings.mapStyle || "ckknu6rsw62dq17nubbhdk7zg");
   const [routeType, setRouteType] = useState(initialSettings.routeType || "none");
   const [mapType, setMapType] = useState(initialSettings.mapType || "fit");
   const [showLabels, setShowLabels] = useState(true);
