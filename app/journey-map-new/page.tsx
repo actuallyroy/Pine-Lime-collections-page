@@ -193,8 +193,7 @@ export default function JourneyMapPage() {
         "mapData": _mapData,
         "product": "JOURNEY_MAP"
       }
-      window.open(`https://www.pinenlime.com/shoppingcart?siteRevision=2&branchId=b0f7cbf8-2628-40ef-a77e-f763338ad500&journeyMapData=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(productData))))}`, '_blank');
-      // window.open(`https://www.pinenlime.com/shoppingcart?journeymapdata=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(productData))))}`, '_blank');
+      window.open(`https://www.pinenlime.com/shoppingcart?journeymapdata=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(productData))))}`, '_blank');
     }
   };
 
