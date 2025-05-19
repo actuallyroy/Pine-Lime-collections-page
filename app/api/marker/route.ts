@@ -1,29 +1,49 @@
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const dataurl = searchParams.get('dataurl');
-  if (!dataurl) {
+  const url = new URL(request.url);
+  // Manually grab the raw `?dataurl=` value so that `+` isn't turned into a space
+  const rawQs = request.url.split('?')[1] || '';
+  const matchParam = rawQs.match(/(?:^|&)dataurl=([^&]+)/);
+  if (!matchParam) {
     return NextResponse.json({ error: 'Missing dataurl parameter' }, { status: 400 });
   }
 
-  // Decode data URL to bytes
-  function dataURLtoBytes(dataurl: string): { mime: string, bytes: Buffer } {
-    const arr = dataurl.split(',');
-    const match = arr[0].match(/:(.*?);/);
-    if (!match) throw new Error('Invalid dataurl');
-    const mime = match[1];
-    const bstr = Buffer.from(arr[1], 'base64');
-    return { mime, bytes: bstr };
+  // decodeURIComponent will fix any %XX escapes; pluses will remain as '+'
+  let dataurl = decodeURIComponent(matchParam[1]);
+
+  // Now split off the meta and the actual base64 payload
+  const [meta, b64] = dataurl.split(',');
+  if (!meta || !b64) {
+    return NextResponse.json({ error: 'Invalid dataurl format' }, { status: 400 });
   }
 
-  try {
-    const { mime, bytes } = dataURLtoBytes(dataurl);
-    return new NextResponse(new Uint8Array(bytes), {
-      status: 200,
-      headers: { 'Content-Type': mime },
-    });
-  } catch (e) {
-    return NextResponse.json({ error: 'Failed to decode dataurl' }, { status: 400 });
+  const mimeMatch = meta.match(/^data:(.*?);base64$/);
+  if (!mimeMatch) {
+    return NextResponse.json({ error: 'Invalid dataurl format' }, { status: 400 });
   }
-} 
+  const mime = mimeMatch[1];
+
+  // Restore any spaces back to '+' in the payload (in case some got mangled)
+  const safeB64 = b64.replace(/ /g, '+');
+
+  // Decode to bytes (handles both Node.js and Edge-runtime)
+  let bytes: Uint8Array;
+  if (typeof Buffer !== 'undefined') {
+    bytes = Buffer.from(safeB64, 'base64');
+  } else {
+    // edge runtime: use atob
+    const bin = atob(safeB64);
+    bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) {
+      bytes[i] = bin.charCodeAt(i);
+    }
+  }
+
+  return new NextResponse(bytes, {
+    status: 200,
+    headers: {
+      'Content-Type': mime,
+    },
+  });
+}
