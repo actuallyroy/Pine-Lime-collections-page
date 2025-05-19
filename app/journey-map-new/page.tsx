@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronRight, Heart, Plus, Trash2, ShoppingCart, AlertTriangle, Edit } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -17,12 +17,15 @@ import AddMarkerModal from "@/components/add-marker-modal";
 import MapPreviewModal from "@/components/map-preview-modal";
 import { cn } from "@/lib/utils";
 import { fetchMapStyles, MapStyle } from "@/lib/map-styles";
+import { v4 as uuidv4 } from 'uuid';
+import { generateMapPreview } from "@/utils/mapUtils";
 
 export default function JourneyMapPage() {
   const [frame, setFrame] = useState("brown");
   const [size, setSize] = useState("8 in");
   const [price, setPrice] = useState(69.99);
   const [originalPrice, setOriginalPrice] = useState(79.99);
+  const [quantity, setQuantity] = useState(1);
   const [isSticky, setIsSticky] = useState(false);
   const [isAddMarkerModalOpen, setIsAddMarkerModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
@@ -34,6 +37,7 @@ export default function JourneyMapPage() {
   const [hasPreviewedMap, setHasPreviewedMap] = useState(false);
   const [showPreviewWarning, setShowPreviewWarning] = useState(false);
   const [mapStyles, setMapStyles] = useState<MapStyle[]>([]);
+  const mapPreviewContainer = useRef<HTMLDivElement>(null);
 
   // Handle scroll for sticky add to cart on mobile
   useEffect(() => {
@@ -125,23 +129,63 @@ export default function JourneyMapPage() {
   };
 
   // Handle add to cart
-  const handleAddToCart = () => {
-    if (!hasPreviewedMap && markers.length > 0) {
-      setShowPreviewWarning(true);
-      // Scroll to warning
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
-          const warningElement = document.getElementById("preview-warning");
-          if (warningElement) {
-            warningElement.scrollIntoView({ behavior: "smooth" });
-          }
-        }, 100);
-      }
-    } else {
-      // Add to cart logic here
-      console.log("Adding to cart:", { markers, mapTitle, mapData, frame, size });
-      alert("Added to cart!");
+  const handleAddToCart = async () => {
+    debugger
+    if (!mapPreviewContainer.current) {
+      console.error("Map preview container not found");
+      return;
     }
+    mapPreviewContainer.current.style.height = mapData.mapHeight + "px";
+    mapPreviewContainer.current.style.width = mapData.mapWidth + "px";
+    const mapPreview = await generateMapPreview(mapPreviewContainer.current, markers, mapTitle, mapData as MapData);
+    console.log(mapPreview);
+    // if (!hasPreviewedMap && markers.length > 0) {
+    //   setShowPreviewWarning(true);
+    //   // Scroll to warning
+    //   if (typeof window !== 'undefined') {
+    //     setTimeout(() => {
+    //       const warningElement = document.getElementById("preview-warning");
+    //       if (warningElement) {
+    //         warningElement.scrollIntoView({ behavior: "smooth" });
+    //       }
+    //     }, 100);
+    //   }
+    // } else {
+    //   const _mapData = {
+    //     "mapStyle": mapData.mapStyle,
+    //     "mapType": mapData.mapType,
+    //     "routeColor": mapData.routeColor,
+    //     "mapZoom": mapData.mapZoom,
+    //     "mapCenter": mapData.mapCenter,
+    //     "markers": markers,
+    //     "routeType": mapData.routeType,
+    //     "title": mapData.title,
+    //     "mapBearing": mapData.mapBearing,
+    //   }
+    //   const productData = {
+    //     "quantity": quantity,
+    //     "order_id": uuidv4(),
+    //     "sku": "0055",
+    //     "s3Links": {
+    //       "objectURL": "https://pinelime-orders.s3.amazonaws.com/JourneyMap/"
+    //     },
+    //     "description": "A journey through the memories",
+    //     "_id": "fdsfdsfadsa",
+    //     "gifttext": "afdsfdsa",
+    //     "currencySymbol": "₹",
+    //     "gift": true,
+    //     "frameSize": "8x8",
+    //     "promptData": {},
+    //     "cost": 1274,
+    //     "map_type": "journeymap",
+    //     "product_id": "Journey Map",
+    //     "title": "a little piece of our hearts",
+    //     "frameColor": "Natural",
+    //     "mapData": {},
+    //     "product": "JOURNEY_MAP"
+    //   }
+    //   window.open(`https://www.pinenlime.com/shoppingcart?journeymapdata=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(_mapData))))}`, '_blank');
+    // }
   };
 
   // Get map type display name
@@ -360,7 +404,38 @@ export default function JourneyMapPage() {
 
             {/* Add to Cart */}
             <div className="space-y-6">
-            <div className="flex gap-4 mt-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="quantity" className="text-[#563635]">Quantity:</Label>
+                  <div className="flex items-center border border-[#563635]/20 rounded-md">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-[#563635] hover:bg-[#563635]/5"
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    >
+                      -
+                    </Button>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      min="1"
+                      value={quantity}
+                      onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-16 text-center border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-[#563635] hover:bg-[#563635]/5"
+                      onClick={() => setQuantity(quantity + 1)}
+                    >
+                      +
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-4 mt-6">
                 <Button className="flex-1 bg-[#b7384e] hover:bg-[#b7384e]/90 text-white py-6 text-lg" disabled={markers.length === 0} onClick={handleAddToCart}>
                   <ShoppingCart className="h-5 w-5 mr-2" />
                   Add to Cart
@@ -409,22 +484,51 @@ export default function JourneyMapPage() {
             <div className="text-lg font-bold text-[#b7384e]">${price.toFixed(2)}</div>
             <div className="text-sm text-[#563635]/60 line-through">${originalPrice.toFixed(2)}</div>
           </div>
-          <div className="flex gap-2">
-            <Button 
-              onClick={handleOpenPreviewModal} 
-              disabled={markers.length === 0} 
-              className="bg-[#563635] hover:bg-[#563635]/90 text-white"
-            >
-              Preview Map
-            </Button>
-            <Button 
-              className="bg-[#b7384e] hover:bg-[#b7384e]/90 text-white" 
-              disabled={markers.length === 0} 
-              onClick={handleAddToCart}
-            >
-              <ShoppingCart className="h-4 w-4 mr-2" />
-              Add to Cart
-            </Button>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center border border-[#563635]/20 rounded-md">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-[#563635] hover:bg-[#563635]/5"
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                >
+                  -
+                </Button>
+                <Input
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-12 text-center border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-[#563635] hover:bg-[#563635]/5"
+                  onClick={() => setQuantity(quantity + 1)}
+                >
+                  +
+                </Button>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                onClick={handleOpenPreviewModal} 
+                disabled={markers.length === 0} 
+                className="bg-[#563635] hover:bg-[#563635]/90 text-white"
+              >
+                Preview Map
+              </Button>
+              <Button 
+                className="bg-[#b7384e] hover:bg-[#b7384e]/90 text-white" 
+                disabled={markers.length === 0} 
+                onClick={handleAddToCart}
+              >
+                <ShoppingCart className="h-4 w-4 mr-2" />
+                Add to Cart
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -513,6 +617,13 @@ export default function JourneyMapPage() {
           onUpdateMarker={handleUpdateMarker} 
         />
       </div>
+
+      <div ref={mapPreviewContainer} className="w-[500px] h-[500px] relative" style={{
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        display: "none"
+      }}></div>
 
       {/* Map Preview Modal */}
       {isPreviewModalOpen && <MapPreviewModal onClose={handleClosePreviewModal} onSave={handleSaveMapSettings} markers={markers} title={mapTitle} initialSettings={mapData} frameSize={size} />}

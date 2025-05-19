@@ -8,13 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import Image from "next/image";
-import { projectCoordinatesToPixels } from "@/lib/map-utils";
 import { fetchMapStyles, MapStyle } from "@/lib/map-styles";
 import MapboxMap from "./mapbox-map";
 import { setMapInstance, getMapInstance } from "@/utils/mapUtils";
 import { HEART_LAYOUT_DATA } from "@/lib/heart-layouts";
 import { generateMarkerImg, getRoute } from "@/lib/map-utils";
 import { Switch } from "@/components/ui/switch";
+import { uploadToS3 } from "@/lib/utils";
+import { toBlob } from 'html-to-image';
 import mapboxgl from "mapbox-gl";
 import * as turf from "@turf/turf";
 
@@ -93,11 +94,11 @@ interface PersistentMapProps {
   routeType: string;
   mapType: string;
   title: string;
+  mapRef: React.RefObject<mapboxgl.Map | null>;
 }
 
 // New PersistentMap component
-function PersistentMap({ markers, frameSize, mapStyle, routeType, mapType, title }: PersistentMapProps) {
-  const mapRef = useRef<mapboxgl.Map | null>(null);
+function PersistentMap({ markers, frameSize, mapStyle, routeType, mapType, title, mapRef }: PersistentMapProps) {
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const navControlRef = useRef<mapboxgl.NavigationControl | null>(null);
@@ -535,8 +536,10 @@ export default function MapPreviewModal({ onClose, onSave, markers, title, frame
   const lastCustomState = useRef<{ center: [number, number]; zoom: number } | null>(null);
   const [splitImageUrls, setSplitImageUrls] = useState<string[]>([]);
   const parentRef = useRef<HTMLDivElement>(null);
+  const [mapBg, setMapBg] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
   const lastMapState = useRef<{ center: [number, number]; zoom: number } | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
   const [hasFitted, setHasFitted] = useState(false);
 
   // Store map state before tab switch
@@ -797,7 +800,7 @@ export default function MapPreviewModal({ onClose, onSave, markers, title, frame
 
   const handleSave = () => {
     // Get the final map state from the map instance
-    const mapInstance = getMapInstance();
+    const mapInstance = mapRef.current
     if (mapInstance) {
       const center = mapInstance.getCenter();
       const zoom = mapInstance.getZoom();
@@ -807,6 +810,8 @@ export default function MapPreviewModal({ onClose, onSave, markers, title, frame
         mapType,
         mapCenter: [center.lng, center.lat],
         mapZoom: zoom,
+        mapHeight: mapInstance.getCanvas().clientHeight,
+        mapWidth: mapInstance.getCanvas().clientWidth,
       });
     } else {
       onSave({
@@ -831,9 +836,9 @@ export default function MapPreviewModal({ onClose, onSave, markers, title, frame
     const [lng, lat] = marker.markerCoordinates || marker.markerLocation;
     const coords = `${lng},${lat},12,0`;
     // Generate marker image as dataURL
-    // const dataUrl = generateMarkerImg(marker.markerEmoji, marker.markerLabel, sizeMap[marker.markerSize]) as string;
+    const dataUrl = generateMarkerImg(marker.markerEmoji, marker.markerLabel, sizeMap[marker.markerSize]) as string;
     // Use the API endpoint to convert dataURL to PNG
-    const markerApiUrl = encodeURIComponent(`https://collections.pinenlime.com/api/generate-marker?emoji=${marker.markerEmoji}&label=${marker.markerLabel}&size=${sizeMap[marker.markerSize]}`);
+    const markerApiUrl = encodeURIComponent(`https://collections.pinenlime.com/api/marker?dataurl=${dataUrl}`);
     // Return Mapbox static map URL with custom marker overlay
     return `https://api.mapbox.com/styles/v1/pinenlime/${styleId}/static/url-${markerApiUrl}(${lng},${lat})/${coords}/${parseInt(frameSize as string) * 48}x${parseInt(frameSize as string) * 48}@2x?access_token=${token}&logo=false&attribution=false`;
   };
@@ -1026,9 +1031,10 @@ export default function MapPreviewModal({ onClose, onSave, markers, title, frame
         {/* Main content */}
         <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
           {/* Map preview */}
-          <div className="flex-1 flex items-center justify-center bg-[#fcf8ed] min-h-[300px] md:min-h-0">
-            <div className="w-full h-full" style={{ display: mapType === "split" ? "none" : "block" }}>
-              <PersistentMap markers={markers} frameSize={frameSize} mapStyle={getCurrentMapStyle()} routeType={routeType} mapType={mapType} title={title} />
+          <div ref={mapContainerRef} className="flex-1 flex items-center justify-center bg-[#fcf8ed] min-h-[300px] md:min-h-0">
+            <div className="w-full h-full relative" style={{ display: mapType === "split" ? "none" : "block" }}>
+              <PersistentMap markers={markers} frameSize={frameSize} mapStyle={getCurrentMapStyle()} routeType={routeType} mapType={mapType} title={title} mapRef={mapRef} />
+              {mapBg && <img className="absolute inset-0 w-full h-full object-cover" src={mapBg} alt="" />}
             </div>
             <div className="w-full h-full" style={{ display: mapType === "split" ? "block" : "none" }}>{renderHeartMap()}</div>
           </div>
