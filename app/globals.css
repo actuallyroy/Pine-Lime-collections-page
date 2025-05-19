@@ -119,3 +119,9 @@ body {
     transform: translate(-50%, -50%);
     bottom: 50px;
 }
+.title{
+  font-size: 14px;
+  padding: 5px 55px;
+  border: 1px solid;
+  outline: 7px solid white;
+}

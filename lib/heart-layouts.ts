@@ -1,6 +1,8 @@
 export const HEART_LAYOUT_DATA = [
   {
     id: 1, // For one marker
+    img: 'heart-1-marker.png',
+    markers: []
   },
   {
     id: 2, // For two markers

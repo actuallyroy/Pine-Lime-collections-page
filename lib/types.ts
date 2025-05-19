@@ -11,9 +11,9 @@ interface Marker {
   markerId: string;
   markerSize: "L" | "M" | "S";
   markerLabel: string;
-  markerCoordinates: [number, number];
+  markerCoordinates: [number, number]; // [xpx, ypx]
   markerEmoji: string;
-  markerLocation: [number, number];
+  markerLocation: [number, number]; // [lat, lng]
   locationName: string;
 }
 
@@ -27,6 +27,9 @@ interface MapData {
   title: string | null,
   mapType: "custom" | "fit" | "split",
   markers: Marker[],
+  mapImage?: string,
+  mapHeight?: number,
+  mapWidth?: number,
 };
 
 interface ProductData {

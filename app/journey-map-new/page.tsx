@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronRight, Heart, Plus, Trash2, ShoppingCart, AlertTriangle, Edit } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -15,14 +15,17 @@ import ProductHeader from "@/components/product-header";
 import ProductFooter from "@/components/product-footer";
 import AddMarkerModal from "@/components/add-marker-modal";
 import MapPreviewModal from "@/components/map-preview-modal";
-import { cn } from "@/lib/utils";
+import { cn, uploadToS3 } from "@/lib/utils";
 import { fetchMapStyles, MapStyle } from "@/lib/map-styles";
+import { v4 as uuidv4 } from 'uuid';
+import { generateMapPreview } from "@/utils/mapUtils";
 
 export default function JourneyMapPage() {
   const [frame, setFrame] = useState("brown");
   const [size, setSize] = useState("8 in");
-  const [price, setPrice] = useState(69.99);
-  const [originalPrice, setOriginalPrice] = useState(79.99);
+  const [price, setPrice] = useState(199);
+  const [originalPrice, setOriginalPrice] = useState(399);
+  const [quantity, setQuantity] = useState(1);
   const [isSticky, setIsSticky] = useState(false);
   const [isAddMarkerModalOpen, setIsAddMarkerModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
@@ -34,6 +37,7 @@ export default function JourneyMapPage() {
   const [hasPreviewedMap, setHasPreviewedMap] = useState(false);
   const [showPreviewWarning, setShowPreviewWarning] = useState(false);
   const [mapStyles, setMapStyles] = useState<MapStyle[]>([]);
+  const mapPreviewContainer = useRef<HTMLDivElement>(null);
 
   // Handle scroll for sticky add to cart on mobile
   useEffect(() => {
@@ -50,11 +54,11 @@ export default function JourneyMapPage() {
 
   // Update price based on selections
   useEffect(() => {
-    const basePrice = size === "a3" ? 69.99 : 89.99;
-    const framePrice = frame === "none" ? 0 : frame === "teak" ? 39.99 : 29.99;
+    const basePrice = size === "4 in" ? 200 : size === "6 in" ? 600 : 900;
+    const framePrice = frame === "none" ? 0 : frame === "brown" ? 299 : 299;
 
     setPrice(basePrice + framePrice);
-    setOriginalPrice((basePrice + framePrice) * 1.15); // 15% off
+    setOriginalPrice((basePrice + framePrice) * 1.2); // 15% off
   }, [size, frame]);
 
   useEffect(() => {
@@ -125,7 +129,7 @@ export default function JourneyMapPage() {
   };
 
   // Handle add to cart
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!hasPreviewedMap && markers.length > 0) {
       setShowPreviewWarning(true);
       // Scroll to warning
@@ -138,9 +142,58 @@ export default function JourneyMapPage() {
         }, 100);
       }
     } else {
-      // Add to cart logic here
-      console.log("Adding to cart:", { markers, mapTitle, mapData, frame, size });
-      alert("Added to cart!");
+      if (!mapPreviewContainer.current) {
+        console.error("Map preview container not found");
+        return;
+      }
+      mapPreviewContainer.current.style.height = mapData.mapHeight + "px";
+      mapPreviewContainer.current.style.width = mapData.mapWidth + "px";
+      const mapPreview = await generateMapPreview(mapPreviewContainer.current, markers, mapTitle, mapData as MapData, size);
+      const orderId = uuidv4();
+      const s3Response = await uploadToS3(mapPreview, orderId);
+      const _mapData = {
+        "mapStyle": mapData.mapStyle,
+        "mapType": mapData.mapType,
+        "routeColor": mapData.routeColor,
+        "mapZoom": mapData.mapZoom,
+        "mapCenter": mapData.mapCenter,
+        "markers": markers,
+        "routeType": mapData.routeType,
+        "title": mapData.title,
+        "mapBearing": mapData.mapBearing,
+      }
+      const sizeMap = {
+        "4 in": "4x4",
+        "6 in": "6x6",
+        "8 in": "8x8"
+      }
+      const frameMap = {
+        "brown": "Dark Brown",
+        "natural": "Natural"
+      }
+      const productData = {
+        "quantity": quantity,
+        "order_id": orderId,
+        "sku": "0055",
+        "s3Links": {
+          "objectURL": s3Response.url
+        },
+        "description": "A journey through the memories",
+        "_id": orderId,
+        "gifttext": mapTitle,
+        "currencySymbol": "₹",
+        "gift": true,
+        "frameSize": sizeMap[size as keyof typeof sizeMap],
+        "promptData": {},
+        "cost": price * quantity,
+        "map_type": "journeymap",
+        "product_id": "Journey Map",
+        "title": mapTitle,
+        "frameColor": frameMap[frame as keyof typeof frameMap],
+        "mapData": _mapData,
+        "product": "JOURNEY_MAP"
+      }
+      window.open(`https://www.pinenlime.com/shoppingcart?journeymapdata=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(productData))))}`, '_blank');
     }
   };
 
@@ -224,8 +277,8 @@ export default function JourneyMapPage() {
                 </Badge>
               </div>
               <div className="mt-4 flex items-center gap-3">
-                <span className="text-3xl font-bold text-[#b7384e]">${price.toFixed(2)}</span>
-                <span className="text-lg text-[#563635]/60 line-through">${originalPrice.toFixed(2)}</span>
+                <span className="text-3xl font-bold text-[#b7384e]">₹{price.toFixed(2)}</span>
+                <span className="text-lg text-[#563635]/60 line-through">₹{originalPrice.toFixed(2)}</span>
               </div>
               <p className="mt-4 text-[#563635]/80">Visualize your travels and adventures in a beautiful custom map. Perfect for commemorating road trips, backpacking journeys, or any adventure that took you to multiple destinations.</p>
             </div>
@@ -245,8 +298,8 @@ export default function JourneyMapPage() {
                 <h3 className="text-lg font-medium text-[#563635] mb-3">Frame</h3>
                 <RadioGroup value={frame} onValueChange={setFrame} className="flex flex-wrap gap-3">
                   {[
-                    { value: "brown", label: "Dark Brown", price: "+$29.99" },
-                    { value: "natural", label: "Natural", price: "+$29.99" },
+                    { value: "brown", label: "Dark Brown", price: "+₹200" },
+                    { value: "natural", label: "Natural", price: "+₹200" },
                   ].map((option) => (
                     <Label key={option.value} htmlFor={`frame-${option.value}`} className={`flex items-center justify-between px-4 py-3 border rounded-md cursor-pointer ${frame === option.value ? "border-[#b7384e] bg-[#b7384e]/5" : "border-[#563635]/20 hover:border-[#563635]/40"}`}>
                       <div className="flex items-center gap-2">
@@ -258,7 +311,7 @@ export default function JourneyMapPage() {
                         )}
                         <span className={frame === option.value ? "text-[#b7384e]" : "text-[#563635]"}>{option.label}</span>
                       </div>
-                      <span className={`text-sm ${frame === option.value ? "text-[#b7384e]" : "text-[#563635]/70"}`}>{option.price}</span>
+                      {/* <span className={`text-sm ${frame === option.value ? "text-[#b7384e]" : "text-[#563635]/70"}`}>{option.price}</span> */}
                     </Label>
                   ))}
                 </RadioGroup>
@@ -269,9 +322,9 @@ export default function JourneyMapPage() {
                 <h3 className="text-lg font-medium text-[#563635] mb-3">Size</h3>
                 <RadioGroup value={size} onValueChange={setSize} className="flex flex-wrap gap-3">
                   {[
-                    { value: "4 in", label: "4x4 in", price: "$69.99" },
-                    { value: "6 in", label: "6x6 in", price: "$89.99" },
-                    { value: "8 in", label: "8x8 in", price: "$109.99" },
+                    { value: "4 in", label: "4x4 in", price: "+₹100" },
+                    { value: "6 in", label: "6x6 in", price: "+₹500" },
+                    { value: "8 in", label: "8x8 in", price: "+₹800" },
                   ].map((option) => (
                     <Label key={option.value} htmlFor={`size-${option.value}`} className={`flex items-center justify-between px-4 py-3 border rounded-md cursor-pointer ${size === option.value ? "border-[#b7384e] bg-[#b7384e]/5" : "border-[#563635]/20 hover:border-[#563635]/40"}`}>
                       <div className="flex items-center gap-2">
@@ -282,8 +335,8 @@ export default function JourneyMapPage() {
                           </svg>
                         )}
                         <span className={size === option.value ? "text-[#b7384e]" : "text-[#563635]"}>{option.label}</span>
-                      </div>
-                      <span className={`text-sm ${size === option.value ? "text-[#b7384e]" : "text-[#563635]/70"}`}>{option.price}</span>
+                      </div>&nbsp;
+                      {/* <span className={`text-sm ${size === option.value ? "text-[#b7384e]" : "text-[#563635]/70"}`}>{option.price}</span> */}
                     </Label>
                   ))}
                 </RadioGroup>
@@ -360,7 +413,38 @@ export default function JourneyMapPage() {
 
             {/* Add to Cart */}
             <div className="space-y-6">
-            <div className="flex gap-4 mt-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="quantity" className="text-[#563635]">Quantity:</Label>
+                  <div className="flex items-center border border-[#563635]/20 rounded-md">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-[#563635] hover:bg-[#563635]/5"
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    >
+                      -
+                    </Button>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      min="1"
+                      value={quantity}
+                      onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-16 text-center border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-[#563635] hover:bg-[#563635]/5"
+                      onClick={() => setQuantity(quantity + 1)}
+                    >
+                      +
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-4 mt-6">
                 <Button className="flex-1 bg-[#b7384e] hover:bg-[#b7384e]/90 text-white py-6 text-lg" disabled={markers.length === 0} onClick={handleAddToCart}>
                   <ShoppingCart className="h-5 w-5 mr-2" />
                   Add to Cart
@@ -409,22 +493,51 @@ export default function JourneyMapPage() {
             <div className="text-lg font-bold text-[#b7384e]">${price.toFixed(2)}</div>
             <div className="text-sm text-[#563635]/60 line-through">${originalPrice.toFixed(2)}</div>
           </div>
-          <div className="flex gap-2">
-            <Button 
-              onClick={handleOpenPreviewModal} 
-              disabled={markers.length === 0} 
-              className="bg-[#563635] hover:bg-[#563635]/90 text-white"
-            >
-              Preview Map
-            </Button>
-            <Button 
-              className="bg-[#b7384e] hover:bg-[#b7384e]/90 text-white" 
-              disabled={markers.length === 0} 
-              onClick={handleAddToCart}
-            >
-              <ShoppingCart className="h-4 w-4 mr-2" />
-              Add to Cart
-            </Button>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center border border-[#563635]/20 rounded-md">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-[#563635] hover:bg-[#563635]/5"
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                >
+                  -
+                </Button>
+                <Input
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-12 text-center border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-[#563635] hover:bg-[#563635]/5"
+                  onClick={() => setQuantity(quantity + 1)}
+                >
+                  +
+                </Button>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                onClick={handleOpenPreviewModal} 
+                disabled={markers.length === 0} 
+                className="bg-[#563635] hover:bg-[#563635]/90 text-white"
+              >
+                Preview Map
+              </Button>
+              <Button 
+                className="bg-[#b7384e] hover:bg-[#b7384e]/90 text-white" 
+                disabled={markers.length === 0} 
+                onClick={handleAddToCart}
+              >
+                <ShoppingCart className="h-4 w-4 mr-2" />
+                Add to Cart
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -513,6 +626,13 @@ export default function JourneyMapPage() {
           onUpdateMarker={handleUpdateMarker} 
         />
       </div>
+
+      <div ref={mapPreviewContainer} className="w-[500px] h-[500px] relative" style={{
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        display: "none"
+      }}></div>
 
       {/* Map Preview Modal */}
       {isPreviewModalOpen && <MapPreviewModal onClose={handleClosePreviewModal} onSave={handleSaveMapSettings} markers={markers} title={mapTitle} initialSettings={mapData} frameSize={size} />}
