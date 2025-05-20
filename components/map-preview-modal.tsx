@@ -95,10 +95,12 @@ interface PersistentMapProps {
   mapType: string;
   title: string;
   mapRef: React.RefObject<mapboxgl.Map | null>;
+  initialCenter?: [number, number];
+  initialZoom?: number;
 }
 
 // New PersistentMap component
-function PersistentMap({ markers, frameSize, mapStyle, routeType, mapType, title, mapRef }: PersistentMapProps) {
+function PersistentMap({ markers, frameSize, mapStyle, routeType, mapType, title, mapRef, initialCenter, initialZoom }: PersistentMapProps) {
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const navControlRef = useRef<mapboxgl.NavigationControl | null>(null);
@@ -148,18 +150,23 @@ function PersistentMap({ markers, frameSize, mapStyle, routeType, mapType, title
 
   useEffect(() => {
     if (!mapRef.current && mapContainerRef.current) {
-      // Initialize map
+      // Initialize map with saved center/zoom if provided
+      const center = initialCenter || mapState.current.center;
+      const zoom = initialZoom !== undefined ? initialZoom : mapState.current.zoom;
+      // update internal state refs
+      mapState.current.center = center;
+      mapState.current.zoom = zoom;
       mapRef.current = new mapboxgl.Map({
         container: mapContainerRef.current,
         style: mapStyle,
-        center: mapState.current.center,
-        zoom: mapState.current.zoom,
+        center: center,
+        zoom: zoom,
       });
     } else if (mapRef.current) {
       // Update map style
       mapRef.current.setStyle(mapStyle);
     }
-  }, [mapStyle]);
+  }, [mapStyle, initialCenter, initialZoom]);
 
   // Add, update and fit markers whenever style or markers change
   useEffect(() => {
@@ -393,18 +400,22 @@ function PersistentMap({ markers, frameSize, mapStyle, routeType, mapType, title
       if (routeType === "air") {
         const line = turf.lineString(coords as number[][]);
         const curved = turf.bezierSpline(line, { sharpness: 1 });
-        displayRoute(curved.geometry.coordinates as [number, number][]);
+        setTimeout(() => {
+          displayRoute(curved.geometry.coordinates as [number, number][]);
+        }, 1000);
       } else if (routeType === "road") {
         getRoute(coords as [number, number][], map.getZoom(), (err, result) => {
           if (!err) {
-            displayRoute(result);
+            setTimeout(() => {
+              displayRoute(result);
+            }, 500);
           }
         });
       }
     };
 
     map.on("style.load", renderRoute);
-    // Run once
+    // Draw route immediately for current routeType
     renderRoute();
     return () => {
       map.off("style.load", renderRoute);
@@ -449,38 +460,49 @@ function PersistentMap({ markers, frameSize, mapStyle, routeType, mapType, title
         visualizePitch: true,
       });
       map.addControl(navControlRef.current, "top-right");
-      // If user has not customized view, fit markers, else restore custom state
-      const isCustomView = customStateRef.current.center[0] !== mapState.current.center[0] || customStateRef.current.center[1] !== mapState.current.center[1] || customStateRef.current.zoom !== mapState.current.zoom;
-      if (isCustomView) {
+      // Restore saved center/zoom if provided
+      if (initialCenter && initialZoom !== undefined) {
         map.jumpTo({
-          center: customStateRef.current.center,
-          zoom: customStateRef.current.zoom,
-          pitch: customStateRef.current.pitch,
-          bearing: customStateRef.current.bearing,
+          center: initialCenter,
+          zoom: initialZoom,
+          pitch: 0,
+          bearing: 0,
         });
-      } else if (markers.length > 0) {
-        // Fit bounds to markers
-        const bounds = new mapboxgl.LngLatBounds();
-        markers.forEach((marker) => bounds.extend(marker.markerCoordinates));
-        map.fitBounds(bounds, { padding: 50, maxZoom: 15, duration: 0 });
-        // Update custom state to the fitted view
-        const center = [bounds.getCenter().lng, bounds.getCenter().lat] as [number, number];
-        customStateRef.current = {
-          center,
-          zoom: map.getZoom(),
-          pitch: map.getPitch(),
-          bearing: map.getBearing(),
-        };
+      } else {
+        // If user has customized view, restore it, else fit markers
+        const isCustomView = customStateRef.current.center[0] !== mapState.current.center[0] || customStateRef.current.center[1] !== mapState.current.center[1] || customStateRef.current.zoom !== mapState.current.zoom;
+        if (isCustomView) {
+          map.jumpTo({
+            center: customStateRef.current.center,
+            zoom: customStateRef.current.zoom,
+            pitch: customStateRef.current.pitch,
+            bearing: customStateRef.current.bearing,
+          });
+        } else if (markers.length > 0) {
+          // Fit bounds to markers
+          const bounds = new mapboxgl.LngLatBounds();
+          markers.forEach((marker) => bounds.extend(marker.markerCoordinates));
+          map.fitBounds(bounds, { padding: 50, maxZoom: 15, duration: 0 });
+          // Update custom state to the fitted view
+          const center = [bounds.getCenter().lng, bounds.getCenter().lat] as [number, number];
+          customStateRef.current = {
+            center,
+            zoom: map.getZoom(),
+            pitch: map.getPitch(),
+            bearing: map.getBearing(),
+          };
+        }
       }
-      // Enable interactions
-      map.dragPan.enable();
-      map.scrollZoom.enable();
-      map.boxZoom.enable();
-      map.dragRotate.enable();
-      map.keyboard.enable();
-      map.doubleClickZoom.enable();
-      map.touchZoomRotate.enable();
-      map.touchPitch.enable();
+     
+     // Enable interactions
+     map.dragPan.enable();
+     map.scrollZoom.enable();
+     map.boxZoom.enable();
+     map.dragRotate.enable();
+     map.keyboard.enable();
+     map.doubleClickZoom.enable();
+     map.touchZoomRotate.enable();
+     map.touchPitch.enable();
     } else if (mapType === "fit") {
       // Disable interactions and hide controls
       map.dragPan.disable();
@@ -492,7 +514,7 @@ function PersistentMap({ markers, frameSize, mapStyle, routeType, mapType, title
       map.touchZoomRotate.disable();
       map.touchPitch.disable();
     }
-  }, [mapType, markers]);
+  }, [mapType, markers, initialCenter, initialZoom]);
 
   return (
     <div ref={parentRef} className="w-full h-full relative overflow-hidden">
@@ -562,15 +584,15 @@ export default function MapPreviewModal({ onClose, onSave, markers, title, frame
         const styles = await fetchMapStyles();
         setCustomStyles(styles);
 
-        // If we have custom styles, use the first one as initial style
         if (styles.length > 0) {
-          const initialStyle = showLabels ? styles[0].styleIdLabelled : styles[0].styleId;
-          setMapStyle(initialStyle);
-
-          // Update map instance if it exists
-          const mapInstance = getMapInstance();
-          if (mapInstance) {
-            mapInstance.setStyle(initialStyle);
+          // Only override if current mapStyle isn't in fetched custom styles
+          const saved = mapStyle;
+          const available = styles.some(s => s.styleId === saved || s.styleIdLabelled === saved);
+          if (!available) {
+            const defaultStyle = showLabels ? styles[0].styleIdLabelled : styles[0].styleId;
+            setMapStyle(defaultStyle);
+            const instance = getMapInstance();
+            if (instance) instance.setStyle(defaultStyle);
           }
         }
       } catch (error) {
@@ -1015,7 +1037,6 @@ export default function MapPreviewModal({ onClose, onSave, markers, title, frame
       </div>
     );
   };
-
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-full sm:max-w-5xl h-[95vh] sm:h-[90vh] flex flex-col">
@@ -1033,7 +1054,17 @@ export default function MapPreviewModal({ onClose, onSave, markers, title, frame
           {/* Map preview */}
           <div ref={mapContainerRef} className="flex-1 flex items-center justify-center bg-[#fcf8ed] min-h-[300px] md:min-h-0">
             <div className="w-full h-full relative" style={{ display: mapType === "split" ? "none" : "block" }}>
-              <PersistentMap markers={markers} frameSize={frameSize} mapStyle={getCurrentMapStyle()} routeType={routeType} mapType={mapType} title={title} mapRef={mapRef} />
+              <PersistentMap
+                markers={markers}
+                frameSize={frameSize}
+                mapStyle={getCurrentMapStyle()}
+                routeType={routeType}
+                mapType={mapType}
+                title={title}
+                mapRef={mapRef}
+                initialCenter={mapCenter}
+                initialZoom={mapZoom}
+              />
               {mapBg && <img className="absolute inset-0 w-full h-full object-cover" src={mapBg} alt="" />}
             </div>
             <div className="w-full h-full" style={{ display: mapType === "split" ? "block" : "none" }}>{renderHeartMap()}</div>
