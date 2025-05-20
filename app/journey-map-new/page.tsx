@@ -122,6 +122,7 @@ export default function JourneyMapPage() {
 
   // Save map settings
   const handleSaveMapSettings = (settings: Partial<MapData>) => {
+    console.log("settings", settings);
     setMapData(settings);
     setIsPreviewModalOpen(false);
     setHasPreviewedMap(true);
@@ -178,11 +179,11 @@ export default function JourneyMapPage() {
         "s3Links": {
           "objectURL": s3Response.url
         },
-        "description": "A journey through the memories",
+        "description": mapTitle,
         "_id": orderId,
-        "gifttext": mapTitle,
+        "gifttext": "",
         "currencySymbol": "₹",
-        "gift": true,
+        "gift": false,
         "frameSize": sizeMap[size as keyof typeof sizeMap],
         "promptData": {},
         "cost": price * quantity,
@@ -193,7 +194,9 @@ export default function JourneyMapPage() {
         "mapData": _mapData,
         "product": "JOURNEY_MAP_V2"
       }
-      window.open(`https://www.pinenlime.com/shoppingcart?journeymapdata=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(productData))))}`);
+
+      window.open(`https://www.pinenlime.com/shoppingcart?siteRevision=2&branchId=2f861fd5-89a0-4e44-9a6a-347dfaac6780&journeyMapData=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(productData))))}`, '_blank');
+      // window.open(`https://www.pinenlime.com/shoppingcart?journeymapdata=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(productData))))}`, '_blank');
     }
   };
 
@@ -376,8 +379,8 @@ export default function JourneyMapPage() {
                         <div key={index} className="flex items-center gap-2 p-2 bg-white rounded-md border border-[#563635]/10 hover:border-[#563635]/30 transition-colors">
                           <div className="text-xl">{marker.markerEmoji}</div>
                           <div className="flex-1">
-                            <div className="text-sm font-medium text-[#563635] truncate">{marker.markerLabel}</div>
-                            <div className="text-xs text-[#563635]/70 truncate">{marker.locationName}</div>
+                            <div className="text-sm font-medium text-[#563635] truncate w-full">{marker.markerLabel}</div>
+                            <div className="text-xs text-[#563635]/70 truncate max-w-[290px]">{marker.locationName}</div>
                           </div>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-[#563635]/50 hover:text-[#b7384e] hover:bg-[#b7384e]/5" onClick={() => handleEditMarker(index)}>
                             <Edit className="h-4 w-4" />

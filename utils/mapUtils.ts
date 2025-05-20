@@ -1,7 +1,9 @@
-import { generateMarkerImg } from "@/lib/map-utils";
+import { generateMarkerImg, getRoute } from "@/lib/map-utils";
 import mapboxgl from "mapbox-gl";
 import { toBlob } from "html-to-image";
 import { HEART_LAYOUT_DATA } from "@/lib/heart-layouts";
+import * as turf from "@turf/turf";
+
 
 // Define marker sizes
 const sizeMap = {
@@ -87,16 +89,21 @@ export function addMarker(lngLat: [number, number], options?: mapboxgl.MarkerOpt
   return marker;
 }
 
-export function getVirtualMapInstance(height: string = "500px", width: string = "500px"): mapboxgl.Map {
+export function getVirtualMapInstance(height: string = "500px", width: string = "500px", center: [number, number] = [126.9152, 37.5542], zoom: number = 12, bearing: number = 0, mapStyle: string = "mapbox://styles/mapbox/standard", route: [number, number][] = []): mapboxgl.Map {
+  
   const mapContainer = document.createElement("div");
+  document.body.appendChild(mapContainer);
   mapContainer.style.height = height;
   mapContainer.style.width = width;
-  return new mapboxgl.Map({
+  const mapInstance = new mapboxgl.Map({
     container: mapContainer,
-    style: "mapbox://styles/mapbox/standard",
-    center: [126.9152, 37.5542],
-    zoom: 12,
+    style: mapStyle,
+    center: center,
+    zoom: zoom,
+    bearing: bearing,
   });
+  document.body.removeChild(mapContainer);
+  return mapInstance;
 }
 
 export function getMapBg(height: number, width: number, center: [number, number], zoom: number, mapStyle: string, bearing: number = 0): Promise<string> {
@@ -125,50 +132,136 @@ const getSingleMarkerUrl = (marker: Marker, mapStyle: string, frameSize: string)
   return `https://api.mapbox.com/styles/v1/pinenlime/${styleId}/static/url-${markerApiUrl}(${lng},${lat})/${coords}/${parseInt(frameSize as string) * 48}x${parseInt(frameSize as string) * 48}@2x?access_token=${token}&logo=false&attribution=false`;
 };
 
-
+// Utility to compute the negative/inverted color for better contrast
+function getNegativeColor(color: string): string {
+  if (color.charAt(0) === "#") {
+    const hex = color.substring(1);
+    const bigint = parseInt(hex, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    const invertedR = 255 - r;
+    const invertedG = 255 - g;
+    const invertedB = 255 - b;
+    return `#${((1 << 24) + (invertedR << 16) + (invertedG << 8) + invertedB)
+      .toString(16)
+      .slice(1)}`;
+  }
+  if (color.startsWith("rgb")) {
+    const matches = color.match(/(\d+),\s*(\d+),\s*(\d+)/);
+    if (!matches) return color;
+    const invertedR = 255 - parseInt(matches[1]);
+    const invertedG = 255 - parseInt(matches[2]);
+    const invertedB = 255 - parseInt(matches[3]);
+    return `rgb(${invertedR}, ${invertedG}, ${invertedB})`;
+  }
+  if (color.startsWith("hsl")) {
+    const matches = color.match(/(\d+),\s*(\d+)%?,\s*(\d+)%?/);
+    if (!matches) return color;
+    const invertedH = (parseInt(matches[1]) + 180) % 360;
+    const invertedS = 100 - parseInt(matches[2]);
+    const invertedL = 100 - parseInt(matches[3]);
+    return `hsl(${invertedH}, ${invertedS}%, ${invertedL}%)`;
+  }
+  return color;
+}
 
 export async function generateMapPreview(mapPreviewContainer: HTMLDivElement, markers: Marker[], mapTitle: string, mapData: MapData, frameSize: string = "4 in"): Promise<Blob> {
+  mapPreviewContainer.innerHTML = "";
   switch (mapData.mapType) {
     case "fit":
     case "custom":
       return new Promise(async (resolve, reject) => {
-        const mapInstance = getVirtualMapInstance(mapData.mapHeight + "px", mapData.mapWidth + "px");
-        mapInstance.setStyle(mapData.mapStyle);
-        mapInstance.setZoom(mapData.mapZoom);
-        if (mapData.mapBearing) {
-          mapInstance.setBearing(mapData.mapBearing);
-        }
+        const mapInstance = await getVirtualMapInstance(mapData.mapHeight + "px", mapData.mapWidth + "px", mapData.mapCenter, mapData.mapZoom, mapData.mapBearing, mapData.mapStyle);
+        mapPreviewContainer.style.height = mapData.mapHeight + "px";
+        mapPreviewContainer.style.width = mapData.mapWidth + "px";
         mapInstance.once("idle", async () => {
           try {
-            const mapBg = await getMapBg(
-              mapData.mapHeight || 500,
-              mapData.mapWidth || 500,
-              mapData.mapCenter,
-              mapData.mapZoom,
-              mapData.mapStyle,
-              mapData.mapBearing
-            );
+            // Draw route on the map before capturing
+            const routeType = mapData.routeType;
+            if (routeType !== "none" && markers.length >= 2) {
+              const coords = markers.map(m => m.markerLocation) as [number, number][];
+              const displayRoute = (coordinates: [number, number][]) => {
+                if (mapInstance.getSource("route-source")) {
+                  (mapInstance.getSource("route-source") as mapboxgl.GeoJSONSource).setData({
+                    type: "Feature",
+                    properties: {},
+                    geometry: { type: "LineString", coordinates },
+                  });
+                } else {
+                  let landColor = "#000000";
+                  try {
+                    if (mapInstance.getLayer("land")) {
+                      const paint = mapInstance.getPaintProperty("land", "background-color");
+                      if (Array.isArray(paint)) landColor = paint[paint.length - 1] as string;
+                      else if (typeof paint === "string") landColor = paint;
+                    } else if (mapInstance.getLayer("background")) {
+                      const paint = mapInstance.getPaintProperty("background", "background-color");
+                      if (Array.isArray(paint)) landColor = paint[paint.length - 1] as string;
+                      else if (typeof paint === "string") landColor = paint;
+                    }
+                  } catch (e) {
+                    console.error("Error getting land color:", e);
+                  }
+                  mapInstance.addSource("route-source", {
+                    type: "geojson",
+                    data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates } },
+                  });
+                  mapInstance.addLayer({
+                    id: "route-layer",
+                    type: "line",
+                    source: "route-source",
+                    layout: { "line-join": "round", "line-cap": "round" },
+                    paint: {
+                      "line-color": mapData.routeColor || getNegativeColor(landColor),
+                      "line-width": 4,
+                      "line-dasharray": [1, 1.5],
+                    },
+                  });
+                }
+              };
+              if (routeType === "air") {
+                const line = turf.lineString(coords as number[][]);
+                const curved = turf.bezierSpline(line, { sharpness: 1 });
+                displayRoute(curved.geometry.coordinates as [number, number][]);
+                // Wait for the map to be idle after drawing the route
+                await new Promise<void>(resolve => {
+                  mapInstance.once("idle", () => {
+                    resolve();
+                  });
+                });
+              } else if (routeType === "road") {
+                await new Promise<void>((res, rej) => {
+                  getRoute(coords, mapInstance.getZoom(), (err, result) => {
+                    if (err) return rej(err);
+                    displayRoute(result);
+                    mapInstance.once("idle", () => res());
+                  });
+                });
+              }
+            }
+            // Capture the canvas with the route drawn
+            const mapBg = mapInstance.getCanvas().toDataURL();
             mapPreviewContainer.style.backgroundImage = `url(${mapBg})`;
             
             // Add markers
             for (const marker of markers) {
-              const markerCoordinates = projectToPixel([marker.markerLocation[0], marker.markerLocation[1]]);
-              if (!markerCoordinates) continue;
-              
+              const markerCoords = projectToPixel([marker.markerLocation[0], marker.markerLocation[1]]);
+              if (!markerCoords) continue;
               const markerImage = generateMarkerImg(marker.markerEmoji, marker.markerLabel, sizeMap[marker.markerSize]);
-              const markerElement = document.createElement("div");
-              markerElement.style.position = "absolute";
-              markerElement.style.left = `${markerCoordinates.x - 30}px`;
-              markerElement.style.top = `${markerCoordinates.y - 30}px`;
-              markerElement.style.width = `60px`;
-              markerElement.style.height = `60px`;
-              markerElement.style.backgroundImage = `url(${markerImage})`;
-              markerElement.style.backgroundSize = "contain";
-              markerElement.style.backgroundRepeat = "no-repeat";
-              markerElement.style.backgroundPosition = "center";
-              mapPreviewContainer.appendChild(markerElement);
+              const el = document.createElement("div");
+              el.style.position = "absolute";
+              el.style.left = `${markerCoords.x - 30}px`;
+              el.style.top = `${markerCoords.y - 30}px`;
+              el.style.width = `60px`;
+              el.style.height = `60px`;
+              el.style.backgroundImage = `url(${markerImage})`;
+              el.style.backgroundSize = "contain";
+              el.style.backgroundRepeat = "no-repeat";
+              el.style.backgroundPosition = "center";
+              mapPreviewContainer.appendChild(el);
             }
-
+            
             // Add title
             const titleDiv = document.createElement("div");
             titleDiv.style.position = "absolute";
@@ -182,7 +275,7 @@ export async function generateMapPreview(mapPreviewContainer: HTMLDivElement, ma
             titleDiv.style.outline = "7px solid white";
             titleDiv.textContent = mapTitle;
             mapPreviewContainer.appendChild(titleDiv);
-
+            
             mapPreviewContainer.style.display = "block";
             const blob = await toBlob(mapPreviewContainer);
             if (!blob) {
