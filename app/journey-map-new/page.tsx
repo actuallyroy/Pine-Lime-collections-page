@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ChevronRight, Heart, Plus, Trash2, ShoppingCart, AlertTriangle, Edit } from "lucide-react";
+import { ChevronRight, Heart, Plus, Trash2, ShoppingCart, AlertTriangle, Edit, Loader2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,7 @@ export default function JourneyMapPage() {
   const [hasPreviewedMap, setHasPreviewedMap] = useState(false);
   const [showPreviewWarning, setShowPreviewWarning] = useState(false);
   const [mapStyles, setMapStyles] = useState<MapStyle[]>([]);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
   const mapPreviewContainer = useRef<HTMLDivElement>(null);
 
   // Handle scroll for sticky add to cart on mobile
@@ -143,58 +144,65 @@ export default function JourneyMapPage() {
         }, 100);
       }
     } else {
-      if (!mapPreviewContainer.current) {
-        console.error("Map preview container not found");
-        return;
+      try {
+        setIsAddingToCart(true);
+        if (!mapPreviewContainer.current) {
+          console.error("Map preview container not found");
+          return;
+        }
+        mapPreviewContainer.current.style.height = mapData.mapHeight + "px";
+        mapPreviewContainer.current.style.width = mapData.mapWidth + "px";
+        const mapPreview = await generateMapPreview(mapPreviewContainer.current, markers, mapTitle, mapData as MapData, size);
+        const orderId = uuidv4();
+        const s3Response = await uploadToS3(mapPreview, orderId);
+        const _mapData = {
+          "mapStyle": mapData.mapStyle,
+          "mapType": mapData.mapType,
+          "routeColor": mapData.routeColor,
+          "mapZoom": mapData.mapZoom,
+          "mapCenter": mapData.mapCenter,
+          "markers": markers,
+          "routeType": mapData.routeType,
+          "title": mapData.title,
+          "mapBearing": mapData.mapBearing,
+        }
+        const sizeMap = {
+          "4 in": "4x4",
+          "6 in": "6x6",
+          "8 in": "8x8"
+        }
+        const frameMap = {
+          "brown": "Dark Brown",
+          "natural": "Natural"
+        }
+        const productData = {
+          "quantity": quantity,
+          "order_id": orderId,
+          "sku": "0055",
+          "s3Links": {
+            "objectURL": s3Response.url
+          },
+          "description": mapTitle,
+          "_id": orderId,
+          "gifttext": "",
+          "currencySymbol": "₹",
+          "gift": false,
+          "frameSize": sizeMap[size as keyof typeof sizeMap],
+          "promptData": {},
+          "cost": price * quantity,
+          "map_type": "journeymap",
+          "product_id": "Journey Map",
+          "title": mapTitle,
+          "frameColor": frameMap[frame as keyof typeof frameMap],
+          "mapData": _mapData,
+          "product": "JOURNEY_MAP_V2"
+        }
+        window.open(`https://www.pinenlime.com/shoppingcart?journeyMapData=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(productData))))}`, '_blank');
+      } catch (error) {
+        console.error('Error adding to cart:', error);
+      } finally {
+        setIsAddingToCart(false);
       }
-      mapPreviewContainer.current.style.height = mapData.mapHeight + "px";
-      mapPreviewContainer.current.style.width = mapData.mapWidth + "px";
-      const mapPreview = await generateMapPreview(mapPreviewContainer.current, markers, mapTitle, mapData as MapData, size);
-      const orderId = uuidv4();
-      const s3Response = await uploadToS3(mapPreview, orderId);
-      const _mapData = {
-        "mapStyle": mapData.mapStyle,
-        "mapType": mapData.mapType,
-        "routeColor": mapData.routeColor,
-        "mapZoom": mapData.mapZoom,
-        "mapCenter": mapData.mapCenter,
-        "markers": markers,
-        "routeType": mapData.routeType,
-        "title": mapData.title,
-        "mapBearing": mapData.mapBearing,
-      }
-      const sizeMap = {
-        "4 in": "4x4",
-        "6 in": "6x6",
-        "8 in": "8x8"
-      }
-      const frameMap = {
-        "brown": "Dark Brown",
-        "natural": "Natural"
-      }
-      const productData = {
-        "quantity": quantity,
-        "order_id": orderId,
-        "sku": "0055",
-        "s3Links": {
-          "objectURL": s3Response.url
-        },
-        "description": mapTitle,
-        "_id": orderId,
-        "gifttext": "",
-        "currencySymbol": "₹",
-        "gift": false,
-        "frameSize": sizeMap[size as keyof typeof sizeMap],
-        "promptData": {},
-        "cost": price * quantity,
-        "map_type": "journeymap",
-        "product_id": "Journey Map",
-        "title": mapTitle,
-        "frameColor": frameMap[frame as keyof typeof frameMap],
-        "mapData": _mapData,
-        "product": "JOURNEY_MAP_V2"
-      }
-      window.open(`https://www.pinenlime.com/shoppingcart?journeyMapData=${encodeURIComponent(btoa(encodeURIComponent(JSON.stringify(productData))))}`, '_blank');
     }
   };
 
@@ -446,9 +454,22 @@ export default function JourneyMapPage() {
                 </div>
               </div>
               <div className="flex gap-4 mt-6">
-                <Button className="flex-1 bg-[#b7384e] hover:bg-[#b7384e]/90 text-white py-6 text-lg" disabled={markers.length === 0} onClick={handleAddToCart}>
-                  <ShoppingCart className="h-5 w-5 mr-2" />
-                  Add to Cart
+                <Button 
+                  className="flex-1 bg-[#b7384e] hover:bg-[#b7384e]/90 text-white py-6 text-lg" 
+                  disabled={markers.length === 0 || isAddingToCart} 
+                  onClick={handleAddToCart}
+                >
+                  {isAddingToCart ? (
+                    <>
+                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                      Adding to Cart...
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingCart className="h-5 w-5 mr-2" />
+                      Add to Cart
+                    </>
+                  )}
                 </Button>
                 <Button variant="outline" className="border-[#563635]/20 text-[#563635] hover:bg-[#563635]/5 py-6">
                   <Heart className="h-5 w-5 mr-2" />
@@ -532,11 +553,20 @@ export default function JourneyMapPage() {
               </Button>
               <Button 
                 className="bg-[#b7384e] hover:bg-[#b7384e]/90 text-white" 
-                disabled={markers.length === 0} 
+                disabled={markers.length === 0 || isAddingToCart} 
                 onClick={handleAddToCart}
               >
-                <ShoppingCart className="h-4 w-4 mr-2" />
-                Add to Cart
+                {isAddingToCart ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart className="h-4 w-4 mr-2" />
+                    Add to Cart
+                  </>
+                )}
               </Button>
             </div>
           </div>

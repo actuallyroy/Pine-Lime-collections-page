@@ -114,10 +114,16 @@ body {
 }
 .split-map-title{
     position: absolute;
-    background-color: rgb(255, 243, 219);
-    left: 0%;
+    font-size: 14px;
+    padding: 5px 55px;
+    border: 1px solid;
+    outline: 7px solid #fffcf6;
+    border-radius: 0px;
+    background-color: #fffcf6;
+    left: 50%;
     transform: translate(-50%, -50%);
     bottom: 50px;
+    z-index: 1001;
 }
 .title{
   font-size: 14px;
