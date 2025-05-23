@@ -1028,12 +1028,12 @@ export default function MapPreviewModal({ onClose, onSave, markers, title, frame
             ))}
             <img src={layout.img} className="split-map-img" alt="" />
           </div>
-          {title && (
-            <div className="split-map-title absolute left-1/2 bottom-8 transform -translate-x-1/2 bg-white/90 px-4 py-2 rounded shadow-md" style={{ scale: 1 / scale }}>
-              {title}
-            </div>
-          )}
         </div>
+        {title && (
+          <div className="split-map-title absolute left-1/2 bottom-8 transform -translate-x-1/2 bg-white/90 px-4 py-2 rounded shadow-md" style={{ scale: 1 / scale }}>
+            {title}
+          </div>
+        )}
       </div>
     );
   };
